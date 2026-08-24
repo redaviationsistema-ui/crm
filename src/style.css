@@ -1,0 +1,389 @@
+:root {
+  font-family:
+    "Segoe UI", "SF Pro Display", -apple-system, BlinkMacSystemFont, sans-serif;
+  color: #10213c;
+  background:
+    radial-gradient(circle at top left, rgba(17, 103, 232, 0.12), transparent 28%),
+    linear-gradient(180deg, #f9fbff 0%, #f6f8fc 100%);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+#app {
+  min-height: 100vh;
+}
+
+.crm-shell {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: 230px minmax(0, 1fr);
+}
+
+.crm-shell.con-detalle {
+  grid-template-columns: 230px minmax(0, 1fr) minmax(360px, 420px);
+}
+
+.crm-main {
+  min-width: 0;
+  width: 100%;
+  max-width: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.contenido {
+  padding: 1.25rem;
+  display: grid;
+  gap: 1.25rem;
+}
+
+.panel,
+.vista-listado {
+  display: grid;
+  gap: 1.25rem;
+}
+
+.hero-panel {
+  background:
+    linear-gradient(135deg, rgba(7, 23, 47, 0.98), rgba(17, 103, 232, 0.95)),
+    #07172f;
+  color: #fff;
+  border-radius: 18px;
+  padding: 1.4rem 1.5rem;
+  display: flex;
+  justify-content: space-between;
+  gap: 1.2rem;
+  align-items: flex-end;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
+}
+
+.hero-panel h1,
+.titulo-seccion h2 {
+  margin: 0;
+}
+
+.hero-panel p,
+.titulo-seccion p,
+.bloque-head p,
+.seguimiento-item p,
+.seguimiento-item span {
+  margin: 0;
+  color: #6d7d98;
+}
+
+.hero-panel p,
+.hero-panel .kicker {
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.kicker {
+  display: inline-block;
+  margin-bottom: 0.55rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.hero-acciones,
+.titulo-seccion {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: center;
+}
+
+.boton-primario,
+.boton-secundario {
+  min-height: 3rem;
+  border: 0;
+  border-radius: 16px;
+  padding: 0.85rem 1.1rem;
+  font-weight: 700;
+}
+
+.boton-primario {
+  background: #1167e8;
+  color: #fff;
+}
+
+.boton-secundario {
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+}
+
+.grid-indicadores {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.panel-bloques,
+.seguimientos-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(280px, 1fr);
+  gap: 1.25rem;
+}
+
+.bloque,
+.tabla-prospectos {
+  border-radius: 18px;
+  background: #fff;
+  border: 1px solid #e4eaf2;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.05);
+  padding: 1.25rem;
+}
+
+.bloque-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.bloque-head strong,
+.titulo-seccion h2,
+.seguimiento-item strong {
+  color: #07172f;
+}
+
+.comparativo {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.comparativo div {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem;
+  border-radius: 14px;
+  background: #f7faff;
+}
+
+.comparativo strong {
+  font-size: 1.6rem;
+  color: #07172f;
+}
+
+.tabla-prospectos {
+  overflow: auto;
+}
+
+.tabla-prospectos table {
+  width: 100%;
+  min-width: 960px;
+  border-collapse: collapse;
+}
+
+.tabla-prospectos th,
+.tabla-prospectos td {
+  text-align: left;
+  padding: 0.95rem;
+  border-bottom: 1px solid #edf2fb;
+}
+
+.tabla-prospectos th {
+  color: #60708d;
+  font-size: 0.82rem;
+  text-transform: uppercase;
+}
+
+.seguimientos-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.seguimiento-lista {
+  display: grid;
+  gap: 0.8rem;
+}
+
+.seguimiento-item {
+  border: 1px solid #dfe7f5;
+  border-radius: 18px;
+  background: #fbfdff;
+  padding: 0.95rem;
+  text-align: left;
+  display: grid;
+  gap: 0.35rem;
+}
+
+.seguimiento-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: center;
+}
+
+.seguimiento-meta span {
+  color: #60708d;
+}
+
+.overlay-mobile,
+.nav-movil {
+  display: none;
+}
+
+.campo-select span {
+  color: #62728e;
+  font-weight: 700;
+}
+
+.campo-select select {
+  min-height: 3rem;
+  border: 1px solid #dbe5f4;
+  border-radius: 14px;
+  padding: 0.8rem 0.95rem;
+}
+
+@media (max-width: 1439px) {
+  .crm-shell {
+    grid-template-columns: 230px minmax(0, 1fr);
+  }
+
+  .grid-indicadores {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 1199px) {
+  .crm-shell {
+    grid-template-columns: 230px minmax(0, 1fr);
+  }
+
+  .panel-bloques {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 1024px) {
+  .grid-indicadores,
+  .seguimientos-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .hero-panel,
+  .titulo-seccion {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
+@media (max-width: 767px) {
+  .crm-shell {
+    grid-template-columns: 1fr;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+  }
+
+  .overlay-mobile {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: rgba(7, 23, 47, 0.36);
+    z-index: 20;
+  }
+
+  .contenido {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    padding: 1rem 1rem 5.75rem;
+  }
+
+  .grid-indicadores,
+  .seguimientos-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .panel-bloques {
+    grid-template-columns: 1fr;
+  }
+
+  .bloque,
+  .tabla-prospectos {
+    padding: 1rem;
+    border-radius: 22px;
+  }
+
+  .hero-panel {
+    padding: 1.2rem;
+    border-radius: 24px;
+  }
+
+  .hero-panel h1 {
+    font-size: 1.55rem;
+  }
+
+  .hero-acciones,
+  .titulo-seccion {
+    gap: 0.75rem;
+  }
+
+  .nav-movil {
+    position: fixed;
+    left: 0.75rem;
+    right: 0.75rem;
+    bottom: 0.75rem;
+    z-index: 35;
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 0.45rem;
+    padding: 0.5rem;
+    border-radius: 20px;
+    background: rgba(255, 255, 255, 0.95);
+    border: 1px solid #dfe7f5;
+    box-shadow: 0 16px 34px rgba(7, 23, 47, 0.1);
+    backdrop-filter: blur(16px);
+  }
+
+  .nav-movil button {
+    border: 0;
+    background: transparent;
+    min-height: 3rem;
+    min-width: 0;
+    padding: 0.5rem 0.2rem;
+    color: #44618e;
+    border-radius: 14px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    line-height: 1.15;
+    text-align: center;
+    word-break: break-word;
+  }
+
+  .nav-movil button:hover,
+  .nav-movil button:focus-visible {
+    background: #eef4ff;
+  }
+}
