@@ -14,6 +14,10 @@ import SkeletonCarga from '@/components/SkeletonCarga.vue'
 import { cerrarSesion, useAuthSession } from '@/composables/useAuthSession'
 import { useCrm } from '@/composables/useCrm'
 import { obtenerMenuPorRol, ROLE_LABELS } from '@/lib/crmNavigation'
+import { supabase } from '@/lib/supabase'
+import { evaluarEscriturasPasswordAdmin } from '@/config/usuariosAdminPasswordWrites'
+import CotizacionesView from '@/views/CotizacionesView.vue'
+import OportunidadesView from '@/views/OportunidadesView.vue'
 import DashboardView from '@/views/DashboardView.vue'
 import HistorialView from '@/views/HistorialView.vue'
 import LlamadasView from '@/views/LlamadasView.vue'
@@ -21,14 +25,27 @@ import PlaceholderView from '@/views/PlaceholderView.vue'
 import ProspectosView from '@/views/ProspectosView.vue'
 import ReportesView from '@/views/ReportesView.vue'
 import SeguimientosView from '@/views/SeguimientosView.vue'
+import UsuariosAdminView from '@/views/UsuariosAdminView.vue'
 
 const crm = useCrm()
 const auth = useAuthSession()
+const passwordWritesContext=computed(()=>{
+  const userId=auth.state.user?.id
+  const perfil=auth.state.perfil
+  return {
+    origin:globalThis.location?.origin,
+    actor:perfil,
+    sesionAutenticada:auth.isAuthenticated.value===true&&Boolean(userId)&&
+      auth.state.session?.user?.id===userId&&perfil?.id===userId,
+  }
+})
+const passwordWritesMode=computed(()=>evaluarEscriturasPasswordAdmin(import.meta.env,passwordWritesContext.value))
 const route = useRoute()
 const router = useRouter()
 const esMovil = ref(false)
 
 const vistaActual = computed(() => route.meta.section || 'panel')
+const vistaAutonoma = computed(() => ['oportunidades','cotizaciones','usuarios'].includes(vistaActual.value))
 const usuarioActualId = computed(() => auth.state.perfil?.id || crm.estado.perfil?.id || '')
 const usuariosVisibles = computed(() =>
   crm.estado.usuarios.filter((usuario) => usuario.id === usuarioActualId.value),
@@ -129,6 +146,7 @@ onUnmounted(() => {
 
     <main class="crm-main">
       <CrmHeader
+        v-if="!vistaAutonoma"
         :titulo="crm.tituloVista.value"
         :subtitulo="crm.descripcionVista.value"
         :mercado="
@@ -150,20 +168,24 @@ onUnmounted(() => {
       />
 
       <div class="contenido">
-        <SkeletonCarga v-if="crm.estado.cargando" />
+        <SkeletonCarga v-if="crm.estado.cargando && !vistaAutonoma" />
 
         <EstadoVacio
-          v-else-if="crm.estado.error"
+          v-else-if="crm.estado.error && !vistaAutonoma"
           titulo="No fue posible cargar el CRM"
           :descripcion="crm.estado.error"
         />
 
-        <p v-else-if="crm.estado.errorOperacion" class="feedback-operacion">
+        <p v-else-if="crm.estado.errorOperacion && !vistaAutonoma" class="feedback-operacion">
           {{ crm.estado.errorOperacion }}
         </p>
 
+        <p v-if="crm.estado.aviso && !vistaAutonoma" role="status">{{ crm.estado.aviso }}</p>
+        <OportunidadesView v-if="vistaActual === 'oportunidades'" :obtener-cliente-supabase="() => supabase" />
+        <CotizacionesView v-else-if="vistaActual === 'cotizaciones'" :obtener-cliente-supabase="() => supabase" />
+        <UsuariosAdminView v-else-if="vistaActual === 'usuarios'" :actor="auth.state.perfil || crm.estado.perfil" :obtener-cliente-supabase="() => supabase" :password-writes-enabled="passwordWritesMode.habilitado" :password-writes-authenticated="passwordWritesContext.sesionAutenticada" :password-writes-block-reason="passwordWritesMode.motivo" :password-writes-requirements="passwordWritesMode.requisitosPendientes" :registro-nuevo="route.meta.registroUsuario === true" :abrir-registro="() => router.push('/admin/usuarios/nuevo')" :volver-listado="() => router.push('/admin/usuarios')" :vista-accion="route.meta.accionUsuario || 'listado'" :usuario-id="String(route.params.usuarioId || '')" :navegar-accion="(accion, id) => router.push('/admin/usuarios/' + accion + (id ? '/' + encodeURIComponent(id) : ''))" />
         <DashboardView
-          v-if="!crm.estado.cargando && !crm.estado.error && crm.vistaActiva.value === 'panel'"
+          v-else-if="!crm.estado.cargando && !crm.estado.error && crm.vistaActiva.value === 'panel'"
           :rol="rolActual"
           :nombre-usuario="auth.state.perfil?.nombre || crm.estado.perfil?.nombre || ''"
           :indicadores="crm.indicadores.value"
@@ -202,6 +224,7 @@ onUnmounted(() => {
           :usuarios="crm.estado.usuarios"
           :contacto-destacado="crm.contactoDestacado.value"
           @nuevo-contacto="crm.abrirFormularioContacto"
+          @editar-contacto="crm.abrirFormularioContacto"
           @programar-llamada="crm.programarLlamada"
         />
 
@@ -232,7 +255,7 @@ onUnmounted(() => {
     </main>
 
     <DetalleLlamadaDrawer
-      v-if="mostrarDetalleEscritorio || (esMovil && crm.estado.llamadaSeleccionada)"
+      v-if="!vistaAutonoma && (mostrarDetalleEscritorio || (esMovil && crm.estado.llamadaSeleccionada))"
       :llamada="crm.estado.llamadaSeleccionada"
       :abierto="esMovil ? crm.drawerAbierto.value : true"
       :eventos="crm.historialSeleccionado.value"
@@ -267,10 +290,13 @@ onUnmounted(() => {
     />
 
     <FormularioContacto
+      :contacto="crm.contactoEnEdicion.value"
+      :guardando="crm.estado.guardando"
+      :error="crm.estado.errorOperacion || ''"
       :abierto="crm.formularioContactoAbierto.value"
       :prospectos="crm.estado.prospectos"
       :usuarios="rolActual === 'ejecutivo' ? usuariosVisibles : usuariosAsignables"
-      @cerrar="crm.formularioContactoAbierto.value = false"
+      @cerrar="!crm.estado.guardando && (crm.formularioContactoAbierto.value = false)"
       @guardar="crm.crearContacto"
       @ver-contacto="verContactoExistente"
     />

@@ -1,5 +1,6 @@
 import { computed, reactive, ref } from 'vue'
 import { supabase } from '@/lib/supabase'
+import { contarRespuestasLlamadas } from '@/lib/crmMetrics'
 import * as crmSupabaseService from '@/services/crmSupabaseService'
 import { esMismaFechaLocal, formatearFecha, normalizarTexto, resolverEstadoLlamada } from '../lib/crm'
 
@@ -11,6 +12,10 @@ export function normalizarError(error) {
   if (error?.code === '42501') {
     return 'No tienes permisos para realizar esta acción.'
   }
+
+  if (/failed to fetch|networkerror|network request|timeout/i.test(error?.message || '')) return 'No se pudo conectar. Revisa tu conexión; tus datos siguen en el formulario.'
+
+  if (error?.code === '23505') return 'Ya existe un registro con esos datos. Revisa el correo o teléfono.'
 
   if (error?.code === '23503') {
     return 'Existe un problema con un registro relacionado.'
@@ -44,6 +49,7 @@ export function useCrm() {
     guardando: false,
     error: null,
     errorOperacion: null,
+    aviso: null,
   })
 
   const vistaActiva = ref('panel')
@@ -51,6 +57,7 @@ export function useCrm() {
   const drawerAbierto = ref(false)
   const formularioAbierto = ref(false)
   const formularioContactoAbierto = ref(false)
+  const contactoEnEdicion = ref(null)
   const contactoDestacado = ref({ id: '', nonce: 0 })
   const modalCancelacion = ref(false)
   const modalReprogramacion = ref(false)
@@ -78,6 +85,8 @@ export function useCrm() {
       ({
         panel: 'Panel general',
         contactos: 'Contactos',
+        oportunidades: 'Oportunidades',
+        cotizaciones: 'Cotizaciones',
         llamadas: 'Llamadas',
         seguimientos: 'Seguimientos',
         historial: 'Historial de llamadas',
@@ -92,6 +101,8 @@ export function useCrm() {
     () =>
       ({
         panel: 'Resumen general del trabajo comercial y operativo.',
+        cotizaciones: 'Propuestas comerciales y vista previa.',
+        oportunidades: 'Pipeline comercial de demostración local.',
         contactos: 'Personas y empresas interesadas en adquirir una aeronave.',
         llamadas: 'Consulta y administra las llamadas registradas en el CRM.',
         seguimientos: 'Llamadas que deben realizarse próximamente.',
@@ -160,7 +171,7 @@ export function useCrm() {
       {
         titulo: 'Completadas',
         valor: llamadas.filter((item) => resolverEstadoLlamada(item) === 'completada').length,
-        ayuda: 'Cierres registrados',
+        ayuda: 'Llamadas completadas',
       },
       {
         titulo: 'Nacionales',
@@ -206,26 +217,22 @@ export function useCrm() {
     return `${Math.round(promedio / 60)} min`
   })
 
+  const respuestasLlamadas = computed(() => contarRespuestasLlamadas(estado.resumenLlamadas))
+
   const reportes = computed(() => [
     {
-      titulo: 'Llamadas realizadas',
-      valor: estado.resumenLlamadas.length,
+      titulo: 'Llamadas registradas',
+      valor: respuestasLlamadas.value.registradas,
       ayuda: 'Base actual visible',
     },
     {
       titulo: 'Contestadas',
-      valor: estado.resumenLlamadas.filter((item) => item.resultadoId).length,
-      ayuda: 'Con resultado registrado',
+      valor: respuestasLlamadas.value.contestadas,
+      ayuda: 'Respuesta afirmativa registrada',
     },
     {
       titulo: 'No contestadas',
-      valor: estado.resumenLlamadas.filter(
-        (item) =>
-          item.contesto === false ||
-          normalizarTexto(item.resultado).includes('no contest') ||
-          normalizarTexto(item.resultado).includes('buzón') ||
-          normalizarTexto(item.resultado).includes('ocupado'),
-      ).length,
+      valor: respuestasLlamadas.value.noContestadas,
       ayuda: 'Intentos sin contacto',
     },
     {
@@ -242,7 +249,7 @@ export function useCrm() {
     {
       titulo: 'Completadas',
       valor: indicadores.value[4]?.valor || 0,
-      ayuda: 'Cierres registrados',
+      ayuda: 'Llamadas completadas',
     },
     {
       titulo: 'Promedio duración',
@@ -250,9 +257,9 @@ export function useCrm() {
       ayuda: 'Calculado sobre llamadas con duración registrada',
     },
     {
-      titulo: 'Seguimientos generados',
+      titulo: 'Requieren seguimiento',
       valor: estado.resumenLlamadas.filter((item) => item.requiereSeguimiento).length,
-      ayuda: 'Con próxima llamada',
+      ayuda: 'Marcadas para dar seguimiento',
     },
   ])
 
@@ -453,23 +460,34 @@ export function useCrm() {
   }
 
   async function crearContacto(formulario) {
+    if (estado.guardando) return
     estado.guardando = true
     estado.errorOperacion = null
-
+    estado.aviso = null
     try {
-      await crmSupabaseService.crearProspecto(formulario)
+      const contacto = contactoEnEdicion.value
+        ? await crmSupabaseService.actualizarProspecto(contactoEnEdicion.value.id, formulario)
+        : await crmSupabaseService.crearProspecto(formulario)
+      const indice = estado.prospectos.findIndex(item => item.id === contacto.id)
+      if (indice < 0) estado.prospectos.unshift(contacto)
+      else estado.prospectos.splice(indice, 1, contacto)
       formularioContactoAbierto.value = false
-      await cargarProspectos()
+      contactoEnEdicion.value = null
+      estado.aviso = 'Contacto guardado correctamente.'
+      try { await cargarProspectos() }
+      catch { estado.aviso = 'El contacto se guardó. No se pudo recargar la lista; puedes volver a cargar la página sin repetir el guardado.' }
     } catch (error) {
-      console.error('No fue posible crear el contacto.', error)
       estado.errorOperacion = normalizarError(error)
-      throw error
     } finally {
       estado.guardando = false
     }
   }
 
-  function abrirFormularioContacto() {
+  function abrirFormularioContacto(contacto = null) {
+    if (estado.guardando) return
+    estado.errorOperacion = null
+    estado.aviso = null
+    contactoEnEdicion.value = contacto?.id ? { ...contacto } : null
     formularioContactoAbierto.value = true
   }
 
@@ -720,6 +738,7 @@ export function useCrm() {
     drawerAbierto,
     formularioAbierto,
     formularioContactoAbierto,
+    contactoEnEdicion,
     contactoDestacado,
     modalCancelacion,
     modalReprogramacion,

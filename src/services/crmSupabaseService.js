@@ -1,3 +1,4 @@
+import { crearCambiosContacto } from '@/domain/contactoPayload'
 import {
   adaptarHistorialDesdeSupabase,
   adaptarImagenDesdeSupabase,
@@ -180,36 +181,8 @@ export async function crearProspecto(formulario) {
 }
 
 export async function actualizarProspecto(id, cambios) {
-  const telefono = normalizarTelefono(cambios.telefono)
-  const whatsapp = normalizarTelefono(cambios.whatsapp)
-  const correo = normalizarCorreo(cambios.correo)
-  const presupuesto =
-    cambios.presupuesto !== '' && cambios.presupuesto != null
-      ? Math.max(0, Number(cambios.presupuesto) || 0)
-      : null
-
-  const payload = {
-    nombre: cambios.nombre?.trim(),
-    apellidos: cambios.apellidos?.trim() || null,
-    empresa: cambios.empresa?.trim() || null,
-    cargo: cambios.cargo?.trim() || null,
-    telefono: telefono || undefined,
-    whatsapp: whatsapp || null,
-    correo: correo || null,
-    tipo_mercado: cambios.tipoMercado || null,
-    pais: cambios.pais?.trim() || null,
-    estado: cambios.estado?.trim() || null,
-    ciudad: cambios.ciudad?.trim() || null,
-    fabricante_interes: cambios.fabricanteInteres || null,
-    modelo_interes: cambios.modeloInteres || null,
-    presupuesto,
-    moneda: cambios.moneda || null,
-    prioridad: cambios.prioridad || null,
-    usuario_responsable_id: cambios.usuarioResponsableId || null,
-    notas: cambios.notas?.trim() || null,
-  }
-
-  Object.keys(payload).forEach((key) => payload[key] === undefined && delete payload[key])
+  const payload = crearCambiosContacto(cambios)
+  if (!Object.keys(payload).length) throw new Error('No hay cambios para guardar.')
 
   const { data, error } = await supabase
     .from('prospectos')
@@ -312,8 +285,6 @@ export async function crearLlamada(formulario) {
     user.id,
   )
 
-  console.log('PAYLOAD LLAMADA', payload)
-
   const { data, error } = await supabase.from('llamadas').insert(payload).select().single()
 
   if (error) throw error
@@ -383,8 +354,6 @@ export async function crearSeguimiento(formulario) {
     p_motivo_personalizado: formulario.motivoPersonalizado || null,
     p_descripcion: formulario.descripcion || null,
   }
-
-  console.log('PAYLOAD SEGUIMIENTO', payload)
 
   const { data, error } = await supabase.rpc('crear_seguimiento_llamada', {
     ...payload,

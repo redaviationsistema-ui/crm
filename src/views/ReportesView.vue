@@ -11,6 +11,9 @@ defineProps({
 
 <template>
   <section class="vista-listado">
+    <p class="alcance-indicadores">
+      Los indicadores corresponden a los registros cargados y pueden ser parciales.
+    </p>
     <div class="grid-indicadores">
       <TarjetaIndicador
         v-for="item in reportes"

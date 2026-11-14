@@ -1,10 +1,11 @@
 <script setup>
-import { computed, reactive, ref, watch } from 'vue'
-import { normalizarCorreo, normalizarTelefono, normalizarTexto } from '@/lib/crm'
-
-const OTRO_VALOR = '__otro__'
+import { nextTick, reactive, ref, watch } from 'vue'
+import { normalizarCorreo, normalizarTelefono } from '@/lib/crm'
 
 const props = defineProps({
+  contacto: { type: Object, default: null },
+  guardando: Boolean,
+  error: { type: String, default: '' },
   abierto: {
     type: Boolean,
     default: false,
@@ -34,9 +35,7 @@ const formulario = reactive({
   estado: '',
   ciudad: '',
   fabricanteInteres: '',
-  fabricanteInteresPersonalizado: '',
   modeloInteres: '',
-  modeloInteresPersonalizado: '',
   presupuesto: '',
   moneda: 'USD',
   prioridad: 'media',
@@ -48,104 +47,34 @@ const usarTelefonoComoWhatsapp = ref(true)
 const mostrarModalDuplicado = ref(false)
 const duplicadoEncontrado = ref(null)
 const errorFormulario = ref('')
-
-const paisesDisponibles = computed(() => {
-  const unicos = new Set(['México'])
-
-  props.prospectos.forEach((prospecto) => {
-    if (prospecto.pais) {
-      unicos.add(prospecto.pais)
-    }
-  })
-
-  return [...unicos].sort((a, b) => a.localeCompare(b, 'es'))
-})
-
-const estadosDisponibles = computed(() => {
-  const unicos = new Set()
-
-  props.prospectos.forEach((prospecto) => {
-    if (
-      prospecto.pais &&
-      prospecto.estado &&
-      normalizarTexto(prospecto.pais) === normalizarTexto(formulario.pais)
-    ) {
-      unicos.add(prospecto.estado)
-    }
-  })
-
-  return [...unicos].sort((a, b) => a.localeCompare(b, 'es'))
-})
-
-const ciudadesDisponibles = computed(() => {
-  const unicos = new Set()
-
-  props.prospectos.forEach((prospecto) => {
-    if (
-      prospecto.pais &&
-      prospecto.estado &&
-      prospecto.ciudad &&
-      normalizarTexto(prospecto.pais) === normalizarTexto(formulario.pais) &&
-      normalizarTexto(prospecto.estado) === normalizarTexto(formulario.estado)
-    ) {
-      unicos.add(prospecto.ciudad)
-    }
-  })
-
-  return [...unicos].sort((a, b) => a.localeCompare(b, 'es'))
-})
-
-const fabricantesDisponibles = computed(() => {
-  const unicos = new Set()
-
-  props.prospectos.forEach((prospecto) => {
-    if (prospecto.fabricanteInteres) {
-      unicos.add(prospecto.fabricanteInteres)
-    }
-  })
-
-  return [...unicos].sort((a, b) => a.localeCompare(b, 'es'))
-})
-
-const fabricanteSeleccionado = computed(() =>
-  formulario.fabricanteInteres === OTRO_VALOR
-    ? formulario.fabricanteInteresPersonalizado
-    : formulario.fabricanteInteres,
-)
-
-const modelosDisponibles = computed(() => {
-  const unicos = new Set()
-  const fabricante = fabricanteSeleccionado.value
-
-  props.prospectos.forEach((prospecto) => {
-    if (
-      prospecto.fabricanteInteres &&
-      prospecto.modeloInteres &&
-      normalizarTexto(prospecto.fabricanteInteres) === normalizarTexto(fabricante)
-    ) {
-      unicos.add(prospecto.modeloInteres)
-    }
-  })
-
-  return [...unicos].sort((a, b) => a.localeCompare(b, 'es'))
-})
-
-const usarModeloManual = computed(
-  () => !modelosDisponibles.value.length || formulario.modeloInteres === OTRO_VALOR,
-)
+let hidratando = false
+function cerrar() { if (!props.guardando) emit('cerrar') }
 
 watch(
   () => props.abierto,
-  (abierto) => {
-    if (abierto) {
-      limpiar()
+  async (abierto) => {
+    if (!abierto) return
+    hidratando = true
+    limpiar()
+    const contacto = props.contacto
+    if (contacto) {
+      for (const campo of Object.keys(formulario)) {
+        if (Object.hasOwn(contacto, campo)) formulario[campo] = contacto[campo] ?? ''
+      }
+      formulario.nombre = contacto.nombres || contacto.nombre || ''
+      formulario.tipoMercado = contacto.mercado || 'nacional'
+      formulario.usuarioResponsableId = contacto.responsableId || ''
+      usarTelefonoComoWhatsapp.value = contacto.whatsapp === contacto.telefono
     }
+    await nextTick()
+    hidratando = false
   },
 )
 
 watch(
   () => usarTelefonoComoWhatsapp.value,
   (activo) => {
+    if (hidratando) return
     if (activo) {
       formulario.whatsapp = formulario.telefono
     }
@@ -155,6 +84,7 @@ watch(
 watch(
   () => formulario.telefono,
   (telefono) => {
+    if (hidratando) return
     if (usarTelefonoComoWhatsapp.value) {
       formulario.whatsapp = telefono
     }
@@ -164,40 +94,9 @@ watch(
 watch(
   () => formulario.tipoMercado,
   (mercadoActual) => {
-    if (mercadoActual === 'nacional') {
+    if (hidratando) return
+    if (mercadoActual === 'nacional' && !formulario.pais.trim()) {
       formulario.pais = 'México'
-    }
-
-    formulario.estado = ''
-    formulario.ciudad = ''
-  },
-)
-
-watch(
-  () => formulario.pais,
-  (nuevoPais, paisAnterior) => {
-    if (nuevoPais !== paisAnterior) {
-      formulario.estado = ''
-      formulario.ciudad = ''
-    }
-  },
-)
-
-watch(
-  () => formulario.estado,
-  (nuevoEstado, estadoAnterior) => {
-    if (nuevoEstado !== estadoAnterior) {
-      formulario.ciudad = ''
-    }
-  },
-)
-
-watch(
-  () => formulario.fabricanteInteres,
-  (fabricanteActual, fabricanteAnterior) => {
-    if (fabricanteActual !== fabricanteAnterior) {
-      formulario.modeloInteres = ''
-      formulario.modeloInteresPersonalizado = ''
     }
   },
 )
@@ -215,9 +114,7 @@ function limpiar() {
   formulario.estado = ''
   formulario.ciudad = ''
   formulario.fabricanteInteres = ''
-  formulario.fabricanteInteresPersonalizado = ''
   formulario.modeloInteres = ''
-  formulario.modeloInteresPersonalizado = ''
   formulario.presupuesto = ''
   formulario.moneda = 'USD'
   formulario.prioridad = 'media'
@@ -230,16 +127,6 @@ function limpiar() {
 }
 
 function obtenerPayload() {
-  const fabricanteFinal =
-    formulario.fabricanteInteres === OTRO_VALOR
-      ? formulario.fabricanteInteresPersonalizado.trim()
-      : formulario.fabricanteInteres
-
-  const modeloFinal =
-    usarModeloManual.value || formulario.modeloInteres === OTRO_VALOR
-      ? formulario.modeloInteresPersonalizado.trim()
-      : formulario.modeloInteres
-
   return {
     nombre: formulario.nombre.trim(),
     apellidos: formulario.apellidos.trim(),
@@ -252,8 +139,8 @@ function obtenerPayload() {
     pais: formulario.pais,
     estado: formulario.estado,
     ciudad: formulario.ciudad,
-    fabricanteInteres: fabricanteFinal,
-    modeloInteres: modeloFinal,
+    fabricanteInteres: formulario.fabricanteInteres.trim(),
+    modeloInteres: formulario.modeloInteres.trim(),
     presupuesto: formulario.presupuesto,
     moneda: formulario.moneda,
     prioridad: formulario.prioridad,
@@ -281,24 +168,10 @@ function validarFormulario() {
     return 'Selecciona un país.'
   }
 
-  if (estadosDisponibles.value.length && !payload.estado) {
-    return 'Selecciona un estado válido.'
-  }
+  if (payload.correo && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(payload.correo)) return 'Escribe un correo válido.'
 
-  if (ciudadesDisponibles.value.length && !payload.ciudad) {
-    return 'Selecciona una ciudad válida.'
-  }
-
-  if (fabricanteSeleccionado.value && !obtenerPayload().fabricanteInteres) {
-    return 'Indica un fabricante válido.'
-  }
-
-  if (usarModeloManual.value && formulario.modeloInteres === OTRO_VALOR && !payload.modeloInteres) {
-    return 'Escribe el modelo de interés.'
-  }
-
-  if (payload.presupuesto !== '' && Number(payload.presupuesto) < 0) {
-    return 'El presupuesto no puede ser negativo.'
+  if (payload.presupuesto !== '' && (!Number.isFinite(Number(payload.presupuesto)) || Number(payload.presupuesto) < 0)) {
+    return 'Escribe un presupuesto válido, igual o mayor que cero.'
   }
 
   return ''
@@ -316,6 +189,7 @@ function buscarDuplicado() {
 
   return (
     props.prospectos.find((prospecto) => {
+      if (prospecto.id === props.contacto?.id) return false
       const correoExistente = normalizarCorreo(prospecto.correo)
       const telefonoExistente = normalizarTelefono(prospecto.telefono)
       const whatsappExistente = normalizarTelefono(prospecto.whatsapp)
@@ -330,6 +204,7 @@ function buscarDuplicado() {
 }
 
 function guardar(forzar = false) {
+  if (props.guardando) return
   errorFormulario.value = validarFormulario()
 
   if (errorFormulario.value) {
@@ -351,25 +226,25 @@ function guardar(forzar = false) {
 </script>
 
 <template>
-  <div v-if="abierto" class="overlay" @click.self="$emit('cerrar')">
-    <section class="drawer-formulario">
-      <div class="encabezado">
+  <div v-if="abierto" class="overlay" @click.self="cerrar">
+    <section class="modal-formulario" role="dialog" aria-modal="true" aria-labelledby="titulo-formulario-contacto">
+      <header class="encabezado">
         <div>
-          <p>Nuevo contacto</p>
-          <strong>Registrar contacto</strong>
+          <p>{{ contacto ? 'Editar contacto' : 'Nuevo contacto' }}</p>
+          <strong id="titulo-formulario-contacto">{{ contacto ? 'Actualizar contacto' : 'Registrar contacto' }}</strong>
         </div>
-        <button @click="$emit('cerrar')">✕</button>
-      </div>
+        <button type="button" aria-label="Cerrar formulario" @click="cerrar" :disabled="guardando">✕</button>
+      </header>
 
-      <p v-if="errorFormulario" class="feedback error">{{ errorFormulario }}</p>
+      <p v-if="errorFormulario || error" class="feedback error" role="alert">{{ errorFormulario || error }}</p>
 
-      <div class="formulario">
+      <fieldset class="formulario" :disabled="guardando" style="border: 0; margin: 0; min-width: 0">
         <section class="bloque-formulario">
           <div class="bloque-titulo">
-            <p>Datos del contacto</p>
+            <p>Información del contacto</p>
           </div>
 
-          <div class="bloque-grid">
+          <div class="bloque-grid bloque-grid-contacto">
             <label>
               <span>Nombre *</span>
               <input v-model="formulario.nombre" type="text" />
@@ -414,8 +289,8 @@ function guardar(forzar = false) {
               />
             </label>
 
-            <label class="campo-completo">
-              <span>Correo</span>
+            <label class="campo-correo">
+              <span>Correo electrónico</span>
               <input v-model="formulario.correo" type="email" />
             </label>
           </div>
@@ -426,7 +301,7 @@ function guardar(forzar = false) {
             <p>Ubicación</p>
           </div>
 
-          <div class="bloque-grid">
+          <div class="bloque-grid bloque-grid-ubicacion">
             <label>
               <span>Mercado *</span>
               <select v-model="formulario.tipoMercado">
@@ -437,103 +312,51 @@ function guardar(forzar = false) {
 
             <label>
               <span>País</span>
-              <select v-model="formulario.pais">
-                <option value="">Selecciona un país</option>
-                <option v-for="paisDisponible in paisesDisponibles" :key="paisDisponible" :value="paisDisponible">
-                  {{ paisDisponible }}
-                </option>
-              </select>
+              <input v-model="formulario.pais" type="text" autocomplete="country-name" />
             </label>
 
             <label>
               <span>Estado</span>
-              <select v-model="formulario.estado" :disabled="!formulario.pais || !estadosDisponibles.length">
-                <option value="">
-                  {{ estadosDisponibles.length ? 'Selecciona un estado' : 'Sin estados disponibles' }}
-                </option>
-                <option v-for="estadoDisponible in estadosDisponibles" :key="estadoDisponible" :value="estadoDisponible">
-                  {{ estadoDisponible }}
-                </option>
-              </select>
+              <input v-model="formulario.estado" type="text" autocomplete="address-level1" />
             </label>
 
             <label>
               <span>Ciudad</span>
-              <select
-                v-model="formulario.ciudad"
-                :disabled="!formulario.estado || !ciudadesDisponibles.length"
-              >
-                <option value="">
-                  {{ ciudadesDisponibles.length ? 'Selecciona una ciudad' : 'Sin ciudades disponibles' }}
-                </option>
-                <option v-for="ciudadDisponible in ciudadesDisponibles" :key="ciudadDisponible" :value="ciudadDisponible">
-                  {{ ciudadDisponible }}
-                </option>
-              </select>
+              <input v-model="formulario.ciudad" type="text" autocomplete="address-level2" />
             </label>
           </div>
         </section>
 
         <section class="bloque-formulario">
           <div class="bloque-titulo">
-            <p>Interés</p>
+            <p>Interés comercial</p>
           </div>
 
-          <div class="bloque-grid">
-            <label>
+          <div class="bloque-grid bloque-grid-interes">
+            <label class="campo-interes campo-fabricante">
               <span>Fabricante de interés</span>
-              <select v-model="formulario.fabricanteInteres">
-                <option value="">Selecciona un fabricante</option>
-                <option v-for="fabricante in fabricantesDisponibles" :key="fabricante" :value="fabricante">
-                  {{ fabricante }}
-                </option>
-                <option :value="OTRO_VALOR">Fabricante personalizado</option>
-              </select>
+              <input v-model="formulario.fabricanteInteres" type="text" />
             </label>
 
-            <label v-if="formulario.fabricanteInteres === OTRO_VALOR">
-              <span>Fabricante personalizado</span>
-              <input
-                v-model="formulario.fabricanteInteresPersonalizado"
-                type="text"
-                placeholder="Escribe el fabricante"
-              />
-            </label>
-
-            <label v-else>
+            <label class="campo-interes">
               <span>Modelo de interés</span>
-              <select v-if="!usarModeloManual" v-model="formulario.modeloInteres">
-                <option value="">Selecciona un modelo</option>
-                <option v-for="modelo in modelosDisponibles" :key="modelo" :value="modelo">
-                  {{ modelo }}
-                </option>
-                <option :value="OTRO_VALOR">Otro / Escribir modelo</option>
-              </select>
-              <input
-                v-else
-                v-model="formulario.modeloInteresPersonalizado"
-                type="text"
-                placeholder="Escribe el modelo de interés"
-              />
+              <input v-model="formulario.modeloInteres" type="text" />
             </label>
 
-            <label v-if="!usarModeloManual && formulario.modeloInteres === OTRO_VALOR">
-              <span>Modelo personalizado</span>
-              <input v-model="formulario.modeloInteresPersonalizado" type="text" />
-            </label>
-
-            <label>
+            <label class="campo-presupuesto">
               <span>Presupuesto</span>
-              <div class="campo-presupuesto">
-                <input v-model="formulario.presupuesto" type="number" min="0" step="1" />
-                <select v-model="formulario.moneda">
-                  <option value="USD">USD</option>
-                  <option value="MXN">MXN</option>
-                </select>
-              </div>
+              <input v-model="formulario.presupuesto" type="number" min="0" step="1" />
             </label>
 
-            <label>
+            <label class="campo-moneda">
+              <span>Moneda</span>
+              <select v-model="formulario.moneda">
+                <option value="USD">USD</option>
+                <option value="MXN">MXN</option>
+              </select>
+            </label>
+
+            <label class="campo-prioridad">
               <span>Prioridad</span>
               <select v-model="formulario.prioridad">
                 <option value="baja">Baja</option>
@@ -543,7 +366,7 @@ function guardar(forzar = false) {
               </select>
             </label>
 
-            <label>
+            <label class="campo-responsable">
               <span>Responsable</span>
               <select v-model="formulario.usuarioResponsableId">
                 <option value="">Selecciona un usuario</option>
@@ -561,15 +384,15 @@ function guardar(forzar = false) {
           </div>
 
           <label class="campo-completo">
-            <textarea v-model="formulario.notas" rows="4" />
+            <textarea v-model="formulario.notas" rows="3" />
           </label>
         </section>
-      </div>
+      </fieldset>
 
-      <div class="acciones">
-        <button class="ghost" @click="$emit('cerrar')">Cancelar</button>
-        <button class="primario" @click="guardar()">Guardar contacto</button>
-      </div>
+      <footer class="acciones">
+        <button type="button" class="ghost" @click="cerrar" :disabled="guardando">Cancelar</button>
+        <button type="button" class="primario" :disabled="guardando" @click="guardar()">{{ guardando ? 'Guardando…' : (contacto ? 'Guardar contacto' : 'Registrar contacto') }}</button>
+      </footer>
     </section>
 
     <div v-if="mostrarModalDuplicado && duplicadoEncontrado" class="modal-duplicado">
@@ -607,7 +430,7 @@ function guardar(forzar = false) {
           <button class="ghost destacado" @click="$emit('ver-contacto', duplicadoEncontrado.id)">
             Ver contacto existente
           </button>
-          <button class="primario" @click="guardar(true)">Guardar de todos modos</button>
+          <button class="primario" @click="guardar(true)" :disabled="guardando">Guardar de todos modos</button>
         </div>
       </article>
     </div>
@@ -618,26 +441,35 @@ function guardar(forzar = false) {
 .overlay {
   position: fixed;
   inset: 0;
-  background: rgba(7, 23, 47, 0.4);
+  background: rgba(7, 23, 47, 0.56);
   z-index: 40;
-  display: flex;
-  justify-content: flex-end;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  box-sizing: border-box;
 }
 
-.drawer-formulario {
-  width: min(100%, 720px);
-  min-height: 100%;
+.modal-formulario {
+  width: min(100%, 1280px);
+  max-height: calc(100dvh - 2rem);
   background: #fff;
-  padding: 1.3rem;
-  display: grid;
-  gap: 1rem;
-  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid #dce6f3;
+  border-radius: 16px;
+  box-shadow: 0 24px 64px rgba(7, 23, 47, 0.28);
 }
 
 .encabezado {
   display: flex;
   justify-content: space-between;
   gap: 1rem;
+  align-items: center;
+  flex: 0 0 auto;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid #e5ebf4;
+  background: #fff;
 }
 
 .encabezado p,
@@ -649,50 +481,75 @@ function guardar(forzar = false) {
   font-weight: 700;
 }
 
+.encabezado p,
+.bloque-titulo p {
+  font-size: 0.78rem;
+  letter-spacing: 0.01em;
+}
+
+.formulario label > span {
+  font-size: 0.78rem;
+}
+
 .encabezado strong {
   color: #07172f;
-  font-size: 1.2rem;
+  display: block;
+  margin-top: 0.1rem;
+  font-size: 1.05rem;
 }
 
 .encabezado button {
   border: 0;
   background: #eef4ff;
-  width: 2.4rem;
-  height: 2.4rem;
-  border-radius: 50%;
+  color: #18365e;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 10px;
   cursor: pointer;
 }
 
 .feedback.error {
-  margin: 0;
-  padding: 0.9rem 1rem;
-  border-radius: 16px;
+  flex: 0 0 auto;
+  margin: 0.55rem 1rem 0;
+  padding: 0.55rem 0.75rem;
+  border-radius: 10px;
   background: #fff0f1;
   color: #b23d44;
 }
 
 .formulario {
   display: grid;
-  gap: 1rem;
+  align-content: start;
+  flex: 1 1 auto;
+  gap: 0;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 0.2rem 1rem 0.65rem;
+  scrollbar-gutter: stable;
 }
 
 .bloque-formulario {
-  border: 1px solid #e4ebf7;
-  border-radius: 22px;
-  padding: 1rem;
+  border: 0;
+  border-bottom: 1px solid #e4ebf7;
+  border-radius: 0;
+  padding: 0.7rem 0;
   display: grid;
-  gap: 0.9rem;
+  gap: 0.45rem;
 }
+
+.bloque-formulario:first-child { padding-top: 0.65rem; }
+.bloque-formulario:last-child { border-bottom: 0; padding-bottom: 0; }
 
 .bloque-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.9rem;
+  gap: 0.55rem 0.7rem;
 }
 
 .formulario label {
   display: grid;
-  gap: 0.45rem;
+  gap: 0.22rem;
 }
 
 .campo-completo {
@@ -702,46 +559,78 @@ function guardar(forzar = false) {
 .formulario input,
 .formulario select,
 .formulario textarea {
-  min-height: 3rem;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 2.4rem;
   border: 1px solid #dbe5f4;
-  border-radius: 14px;
-  padding: 0.8rem 0.95rem;
+  border-radius: 10px;
+  padding: 0.42rem 0.65rem;
+  color: #132f54;
   font: inherit;
 }
 
 .formulario textarea {
-  min-height: 6rem;
+  min-height: 3.75rem;
   resize: vertical;
 }
 
 .check-ayuda {
   display: inline-flex;
   align-items: center;
-  gap: 0.45rem;
+  gap: 0.35rem;
   color: #5f718f;
-  font-size: 0.92rem;
+  font-size: 0.76rem;
 }
 
 .check-ayuda input {
   min-height: auto;
 }
 
-.campo-presupuesto {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 110px;
-  gap: 0.7rem;
+.bloque-grid-contacto {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.campo-correo { grid-column: span 2; }
+
+.bloque-grid-ubicacion {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.bloque-grid-interes {
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+}
+
+.campo-interes {
+  grid-column: span 6;
+}
+
+.campo-presupuesto,
+.campo-moneda,
+.campo-prioridad {
+  grid-column: span 3;
+}
+
+.campo-responsable {
+  grid-column: span 3;
 }
 
 .acciones {
+  flex: 0 0 auto;
   display: flex;
+  justify-content: flex-end;
   gap: 0.7rem;
+  padding: 0.7rem 1rem;
+  border-top: 1px solid #e5ebf4;
+  background: #fff;
+  box-shadow: 0 -8px 18px rgba(25, 55, 91, 0.04);
 }
 
 .acciones button {
-  flex: 1;
-  min-height: 3rem;
+  flex: 0 1 auto;
+  min-width: 8.75rem;
+  min-height: 2.4rem;
   border: 0;
-  border-radius: 14px;
+  border-radius: 10px;
   font-weight: 700;
   cursor: pointer;
 }
@@ -757,8 +646,22 @@ function guardar(forzar = false) {
 }
 
 .primario {
-  background: #1167e8;
+  background: #163e70;
   color: #fff;
+}
+
+.acciones-modal {
+  flex-wrap: wrap;
+}
+
+/* El diálogo de duplicados conserva sus acciones ocupando el ancho disponible. */
+.dialogo-duplicado .acciones button {
+  flex: 1;
+}
+
+.campo-presupuesto {
+  display: grid;
+  gap: 0.3rem;
 }
 
 .modal-duplicado {
@@ -809,23 +712,70 @@ function guardar(forzar = false) {
   margin-top: 0.2rem;
 }
 
-.acciones-modal {
-  flex-wrap: wrap;
+@media (max-width: 820px) {
+  .bloque-grid-contacto,
+  .bloque-grid-ubicacion {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .campo-correo { grid-column: 1 / -1; }
+
+  .bloque-grid-interes {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .campo-interes,
+  .campo-presupuesto,
+  .campo-moneda,
+  .campo-prioridad,
+  .campo-responsable {
+    grid-column: span 1;
+  }
 }
 
-@media (max-width: 767px) {
-  .drawer-formulario {
+@media (max-width: 600px) {
+  .overlay { padding: 0; }
+
+  .modal-formulario {
     width: 100%;
+    max-height: 100dvh;
+    height: 100dvh;
+    border: 0;
+    border-radius: 0;
   }
 
   .bloque-grid,
   .detalle-duplicado,
-  .campo-presupuesto {
+  .bloque-grid-contacto,
+  .bloque-grid-interes {
     grid-template-columns: 1fr;
   }
 
+  .campo-interes,
+  .campo-correo,
+  .campo-presupuesto,
+  .campo-moneda,
+  .campo-prioridad,
+  .campo-responsable {
+    grid-column: 1;
+  }
+
+  .encabezado,
   .acciones {
-    flex-direction: column;
+    padding-right: 1rem;
+    padding-left: 1rem;
+  }
+
+  .formulario { padding-right: 1rem; padding-left: 1rem; }
+  .bloque-formulario { padding-right: 0; padding-left: 0; }
+
+  .acciones {
+    justify-content: stretch;
+  }
+
+  .acciones button {
+    flex: 1;
+    min-width: 0;
   }
 }
 </style>

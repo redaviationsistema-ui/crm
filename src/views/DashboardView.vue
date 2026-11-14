@@ -43,20 +43,8 @@ const llamadasResumen = computed(() => props.llamadas.slice(0, 4))
 
 <template>
   <section class="panel dashboard-shell">
-    <div class="hero-panel hero-panel-compacto">
-      <div>
-        <span class="kicker">Tu jornada</span>
-        <h1>{{ rol === 'ejecutivo' ? `Hola, ${nombreUsuario || 'equipo'}` : 'Panel general' }}</h1>
-        <p v-if="rol === 'ejecutivo'">Tienes llamadas y seguimientos pendientes para hoy.</p>
-        <p v-else>Resumen del trabajo comercial y operativo.</p>
-      </div>
-      <div class="hero-acciones">
-        <button class="boton-primario" @click="$emit('abrir-llamada')">+ Programar llamada</button>
-        <button v-if="rol !== 'ejecutivo'" class="boton-secundario" @click="$emit('abrir-reportes')">
-          Ver reportes
-        </button>
-      </div>
-    </div>
+   
+
 
     <div class="dashboard-grid">
       <div class="dashboard-columna-principal">
@@ -175,7 +163,7 @@ const llamadasResumen = computed(() => props.llamadas.slice(0, 4))
               <strong>{{ resumenMercados.internacional }}</strong>
             </div>
             <div class="mercado-item destacado">
-              <span>Completadas hoy</span>
+              <span>Completadas</span>
               <strong>{{ resumenMercados.completadas }}</strong>
             </div>
           </div>

@@ -5,11 +5,14 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "test": "node --test",
     "build": "vite build",
     "preview": "vite preview"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.112.4",
+    "jspdf": "^4.2.1",
+    "jspdf-autotable": "^5.0.9",
     "vue": "^3.5.41",
     "vue-router": "^4.6.4"
   },

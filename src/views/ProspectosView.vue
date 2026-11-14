@@ -26,7 +26,7 @@ const props = defineProps({
   },
 })
 
-const emit = defineEmits(['nuevo-contacto', 'programar-llamada'])
+const emit = defineEmits(['nuevo-contacto', 'programar-llamada', 'editar-contacto'])
 
 const busqueda = ref('')
 const mercado = ref('todos')
@@ -353,6 +353,7 @@ watch(
                 <div class="menu-acciones">
                   <button class="boton-menu" @click="alternarMenu(prospecto.id)">⋮</button>
                   <div v-if="menuAbiertoId === prospecto.id" class="dropdown-acciones">
+                    <button @click="$emit('editar-contacto', prospecto)">Editar contacto</button>
                     <button @click="abrirDetalle(prospecto)">Ver contacto</button>
                     <button @click="programarDesdeContacto(prospecto)">Programar llamada</button>
                     <button @click="abrirDetalle(prospecto, 'llamadas')">Ver llamadas</button>
@@ -387,6 +388,7 @@ watch(
           </div>
 
           <div class="tarjeta-acciones" @click.stop>
+            <button @click="$emit('editar-contacto', prospecto)">Editar</button>
             <button class="boton-programar" @click="programarDesdeContacto(prospecto)">
               📞 Programar
             </button>
@@ -404,6 +406,7 @@ watch(
             <strong>{{ prospectoActivo.nombre }}</strong>
             <span>{{ prospectoActivo.empresaVisible }}</span>
           </div>
+          <button @click="$emit('editar-contacto', prospectoActivo)">Editar contacto</button>
           <button @click="cerrarDetalle">✕</button>
         </div>
 

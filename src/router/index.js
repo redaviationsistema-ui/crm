@@ -2,8 +2,11 @@ import { createRouter, createWebHistory } from 'vue-router'
 import { cerrarSesion, iniciarAuthListener, validarAccesoCrm } from '@/composables/useAuthSession'
 import CrmShellView from '@/views/CrmShellView.vue'
 import LoginView from '@/views/LoginView.vue'
+import EstablecerAccesoView from '@/views/EstablecerAccesoView.vue'
 
 const crmRoutes = [
+  { path: '/cotizaciones', component: CrmShellView, meta: { requiresAuth: true, section: 'cotizaciones' } },
+  { path: '/oportunidades', component: CrmShellView, meta: { requiresAuth: true, section: 'oportunidades' } },
   { path: '/', component: CrmShellView, meta: { requiresAuth: true, section: 'panel' } },
   {
     path: '/llamadas',
@@ -47,8 +50,18 @@ const crmRoutes = [
       roles: ['administrador', 'supervisor'],
     },
   },
+  ...[
+    ['editar/:usuarioId','editar'],['estado/:usuarioId','estado'],['eliminar/:usuarioId','eliminar'],
+    ['historial','historial'],['diagnostico','diagnostico'],['recargar','recargar'],
+  ].map(([ruta,accion])=>({path:`/admin/usuarios/${ruta}`,component:CrmShellView,meta:{requiresAuth:true,section:'usuarios',roles:['administrador'],accionUsuario:accion}})),
   {
-    path: '/usuarios',
+    path: '/admin/usuarios/nuevo',
+    component: CrmShellView,
+    meta: { requiresAuth: true, section: 'usuarios', roles: ['administrador'], registroUsuario: true },
+  },
+  {
+    path: '/admin/usuarios',
+    alias: '/usuarios',
     component: CrmShellView,
     meta: {
       requiresAuth: true,
@@ -71,6 +84,7 @@ export const router = createRouter({
       component: LoginView,
       meta: { publicOnly: true },
     },
+    { path: '/establecer-acceso', component: EstablecerAccesoView },
     ...crmRoutes,
   ],
 })
