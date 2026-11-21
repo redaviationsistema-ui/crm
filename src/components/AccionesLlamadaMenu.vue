@@ -1,4 +1,6 @@
 <script setup>
+import { cerrarMenuConEscape } from '../compartido/utilidades/cerrarMenuConEscape.js'
+
 import { computed } from 'vue'
 import { resolverEstadoLlamada } from '@/lib/crm'
 
@@ -64,8 +66,8 @@ const acciones = computed(() => {
 </script>
 
 <template>
-  <details class="menu-acciones">
-    <summary>⋮</summary>
+  <details class="menu-acciones" @keydown.esc="cerrarMenuConEscape">
+    <summary aria-label="Acciones de llamada">⋮</summary>
     <div class="menu-lista">
       <button
         v-for="[label, action] in acciones"
@@ -90,14 +92,15 @@ const acciones = computed(() => {
   color: #1167e8;
   font-size: 1.4rem;
   line-height: 1;
+  display: grid;
+  place-items: center;
+  min-width: 28px;
+  min-height: 28px;
+  border-radius: var(--radio-control);
 }
 
 .menu-lista {
-  position: absolute;
-  right: 0;
-  bottom: calc(100% + 0.5rem);
-  z-index: 8;
-  min-width: 220px;
+  min-width: 150px;
   padding: 0.5rem;
   border-radius: 16px;
   border: 1px solid #dbe5f4;
@@ -111,7 +114,7 @@ const acciones = computed(() => {
   border: 0;
   background: transparent;
   text-align: left;
-  padding: 0.75rem 0.8rem;
+  padding: 5px 8px;
   border-radius: 12px;
   cursor: pointer;
 }

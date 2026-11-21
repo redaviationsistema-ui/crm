@@ -1,6 +1,6 @@
-import { configuracionOportunidades, evaluarModoOportunidades } from '../config/oportunidadesBackend.js'
-import { crearAdaptadorOportunidadesSupabase } from './oportunidadesSupabaseAdapter.js'
-import { validarOportunidad } from '../domain/oportunidades.js'
+import { configuracionOportunidades, evaluarModoOportunidades } from '../esquemas/contratoOportunidadesSupabase.js'
+import { crearAdaptadorOportunidadesSupabase } from '../adaptadores/adaptadorOportunidadesSupabase.js'
+import { validarOportunidad } from '../dominio/oportunidades.js'
 
 const CLAVE = 'crm-aviacion:oportunidades-demostracion:v1'
 const copia = valor => structuredClone(valor)
@@ -37,7 +37,7 @@ export function crearDatosDemostracion() {
 }
 
 // Adaptador exclusivamente local. Nunca importa Supabase ni recibe datos/clientes reales.
-export function crearOportunidadesService({ storage = null, ahora = () => new Date().toISOString(), id = () => crypto.randomUUID() } = {}) {
+export function crearServicioOportunidadesDemostracion({ storage = null, ahora = () => new Date().toISOString(), id = () => crypto.randomUUID() } = {}) {
   function leer() {
     let raw
     try { raw = storage?.getItem(CLAVE) }
@@ -118,19 +118,33 @@ export function crearOportunidadesService({ storage = null, ahora = () => new Da
   }
 }
 export function crearServicioOportunidadesNavegador({ env = import.meta.env || {}, config = configuracionOportunidades, obtenerCliente } = {}) {
-  const evaluacion = evaluarModoOportunidades(env, config)
-  if (evaluacion.habilitado) {
+  if (env.VITE_OPORTUNIDADES_MODO === 'supabase') {
+    let motivo
     try {
-      if (typeof obtenerCliente !== 'function') throw new Error('Falta proporcionar el cliente autenticado del CRM.')
-      return crearAdaptadorOportunidadesSupabase({env,config,obtenerCliente})
+      const evaluacion = evaluarModoOportunidades(env, config)
+      motivo = evaluacion.motivo
+      if (evaluacion.habilitado) {
+        if (typeof obtenerCliente !== 'function') throw new Error('Falta proporcionar el cliente autenticado del CRM.')
+        return crearAdaptadorOportunidadesSupabase({ env, config, obtenerCliente })
+      }
     } catch (error) {
-      evaluacion.habilitado = false
-      evaluacion.motivo = error.message
+      motivo = error.message
+    }
+    const rechazar = async () => { throw new Error(motivo) }
+    return {
+      modo: 'bloqueado',
+      backendBloqueado: motivo,
+      permiteGestionEtapas: false,
+      cargar: rechazar,
+      guardar: rechazar,
+      obtenerHistorial: rechazar,
+      guardarEtapa: rechazar,
+      restablecer: rechazar,
     }
   }
   let storage = null
   try { storage = globalThis.sessionStorage ?? null } catch { /* Modo temporal visible. */ }
-  return { ...crearOportunidadesService({ storage }), backendBloqueado: evaluacion.motivo }
+  return { ...crearServicioOportunidadesDemostracion({ storage }), backendBloqueado: evaluarModoOportunidades(env, config).motivo }
 }
 
 export function filtrarOportunidades(datos, filtros = {}) {

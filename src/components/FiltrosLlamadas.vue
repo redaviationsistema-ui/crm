@@ -28,6 +28,7 @@ function actualizar(campo, valor) {
         v-for="tab in rol === 'ejecutivo' ? ['asignadas', 'en-seguimiento', 'completadas', 'vencida'] : ['todas', 'asignadas', 'creadas']"
         :key="tab"
         :class="{ activo: filtros.tab === tab }"
+        :aria-pressed="filtros.tab === tab"
         @click="actualizar('tab', tab)"
       >
         {{
@@ -44,6 +45,15 @@ function actualizar(campo, valor) {
     </div>
 
     <div class="controles">
+      <label class="busqueda">
+        <span>Buscar</span>
+        <input
+          type="search"
+          :value="filtros.busqueda"
+          placeholder="Cliente, empresa, teléfono o motivo"
+          @input="actualizar('busqueda', $event.target.value)"
+        />
+      </label>
       <label>
         <span>Mercado</span>
         <select :value="filtros.mercado" @change="actualizar('mercado', $event.target.value)">
@@ -98,15 +108,6 @@ function actualizar(campo, valor) {
         />
       </label>
 
-      <label class="busqueda">
-        <span>Buscar</span>
-        <input
-          type="search"
-          :value="filtros.busqueda"
-          placeholder="Buscar cliente, empresa, telefono o motivo..."
-          @input="actualizar('busqueda', $event.target.value)"
-        />
-      </label>
     </div>
   </section>
 </template>
@@ -114,81 +115,28 @@ function actualizar(campo, valor) {
 <style scoped>
 .filtros {
   display: grid;
-  gap: 1rem;
+  gap: var(--espacio-corto);
+  padding: var(--espacio-panel);
+  background: var(--color-superficie);
+  border: 1px solid var(--color-borde);
+  border-radius: var(--radio-panel);
 }
 
-.tabs {
-  display: flex;
-  gap: 0.65rem;
-  flex-wrap: wrap;
+.tabs, .controles { display: flex; flex-wrap: wrap; gap: var(--espacio-corto); }
+.controles label { display: grid; gap: 4px; flex: 1 1 104px; min-width: 0; }
+.controles .busqueda { flex: 2 1 190px; }
+.controles span { color: var(--color-secundario); font-size: var(--texto-secundario); font-weight: 600; }
+.tabs button, .controles :is(input, select) {
+  min-height: var(--altura-control);
+  padding: 0 8px;
+  border: 1px solid var(--color-borde);
+  border-radius: var(--radio-control);
+  background: var(--color-superficie);
+  color: var(--color-tinta);
 }
-
-.tabs button,
-.controles select,
-.controles input {
-  border: 1px solid #dbe5f4;
-  background: #fff;
-  border-radius: 14px;
-}
-
-.tabs button {
-  padding: 0.85rem 1rem;
-  font-weight: 700;
-  color: #5d6d8c;
-  cursor: pointer;
-}
-
-.tabs .activo {
-  background: #1167e8;
-  color: #fff;
-  border-color: #1167e8;
-}
-
-.controles {
-  display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
-  gap: 0.85rem;
-}
-
-.controles label {
-  display: grid;
-  gap: 0.35rem;
-}
-
-.controles span {
-  font-size: 0.82rem;
-  color: #60708d;
-  font-weight: 700;
-}
-
-.controles select,
-.controles input {
-  min-height: 3rem;
-  padding: 0 0.9rem;
-  color: #07172f;
-}
-
-.busqueda {
-  grid-column: span 2;
-}
-
-@media (max-width: 1024px) {
-  .controles {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .busqueda {
-    grid-column: span 2;
-  }
-}
-
+.controles :is(input, select) { width: 100%; min-width: 0; }
+.tabs .activo { background: var(--color-seleccion); color: var(--color-accion); border-color: var(--color-accion); }
 @media (max-width: 767px) {
-  .controles {
-    grid-template-columns: 1fr;
-  }
-
-  .busqueda {
-    grid-column: auto;
-  }
+  .controles .busqueda { flex-basis: 100%; }
 }
 </style>

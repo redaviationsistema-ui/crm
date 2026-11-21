@@ -2,7 +2,7 @@ import { computed, reactive, ref } from 'vue'
 import { supabase } from '@/lib/supabase'
 import { contarRespuestasLlamadas } from '@/lib/crmMetrics'
 import * as crmSupabaseService from '@/services/crmSupabaseService'
-import { esMismaFechaLocal, formatearFecha, normalizarTexto, resolverEstadoLlamada } from '../lib/crm'
+import { duracionLlamadaValida, esMismaFechaLocal, limitesDiaLocal, formatearFecha, normalizarTexto, resolverEstadoLlamada } from '../lib/crm'
 
 export function normalizarError(error) {
   if (String(error?.message || '').includes('fecha_programada')) {
@@ -34,11 +34,15 @@ export function useCrm() {
     perfil: null,
     contexto: null,
     llamadas: [],
+    llamadasRecientes: [],
+    errorLlamadasRecientes: null,
     resumenLlamadas: [],
     llamadasHoy: [],
     llamadasVencidas: [],
     prospectos: [],
     usuarios: [],
+    cargandoResponsables: false,
+    errorResponsables: null,
     motivos: [],
     resultados: [],
     notificaciones: [],
@@ -46,6 +50,12 @@ export function useCrm() {
     llamadaSeleccionada: null,
     totalLlamadas: 0,
     cargando: false,
+    cargandoContactos: false,
+    errorContactos: null,
+    cargandoHistorialContactos: false,
+    errorHistorialContactos: null,
+    finalizaciones: new Map(),
+    reprogramacion: null,
     guardando: false,
     error: null,
     errorOperacion: null,
@@ -69,6 +79,9 @@ export function useCrm() {
   const llamadaPendienteReprogramacion = ref(null)
   const llamadaPendienteReasignacion = ref(null)
   const canalRealtime = ref(null)
+  const finalizacionesEnCurso = new Set()
+  const reprogramacionesInciertas = new Map()
+  const reprogramando = ref(false)
 
   const filtros = ref({
     tab: 'todas',
@@ -114,12 +127,16 @@ export function useCrm() {
       })[vistaActiva.value],
   )
 
-  const llamadasFiltradas = computed(() => {
+  function crearFiltroLocalLlamadas() {
     const busqueda = normalizarTexto(filtros.value.busqueda)
 
-    return estado.llamadas.filter((llamada) => {
-      if (filtros.value.fecha && !llamada.fechaProgramada?.startsWith(filtros.value.fecha)) {
-        return false
+    const limites = filtros.value.fecha ? limitesDiaLocal(filtros.value.fecha) : null
+
+    const fecha = filtros.value.fecha
+    return (llamada) => {
+      if (fecha) {
+        const instante = Date.parse(llamada.fechaProgramada)
+        if (!limites || !(instante >= limites.inicio && instante < limites.fin)) return false
       }
 
       if (!busqueda) {
@@ -137,8 +154,10 @@ export function useCrm() {
         .toLowerCase()
 
       return contenido.includes(busqueda)
-    })
-  })
+    }
+  }
+
+  const llamadasFiltradas = computed(() => estado.llamadas.filter(crearFiltroLocalLlamadas()))
 
   const historialSeleccionado = computed(() => estado.historial)
 
@@ -317,6 +336,19 @@ export function useCrm() {
     return estado.usuarios
   }
 
+  async function refrescarResponsablesLlamadas() {
+    if (estado.cargandoResponsables) return
+    estado.cargandoResponsables = true
+    estado.errorResponsables = null
+    try {
+      await cargarUsuarios()
+    } catch (error) {
+      estado.errorResponsables = normalizarError(error)
+    } finally {
+      estado.cargandoResponsables = false
+    }
+  }
+
   async function cargarProspectos() {
     estado.prospectos = await crmSupabaseService.obtenerProspectos()
     return estado.prospectos
@@ -332,11 +364,29 @@ export function useCrm() {
     return estado.resultados
   }
 
+  let solicitudLlamadasRecientes = 0
+
+  async function cargarLlamadasRecientes() {
+    if (!estado.usuario?.id || vistaActiva.value !== 'panel') return
+    const solicitud = ++solicitudLlamadasRecientes
+    const filtroLocal = filtros.value.fecha || filtros.value.busqueda ? crearFiltroLocalLlamadas() : null
+    try {
+      const llamadas = await crmSupabaseService.obtenerLlamadasRecientes(
+        filtrosRemotosActuales(), filtroLocal,
+      )
+      if (solicitud !== solicitudLlamadasRecientes) return
+      estado.llamadasRecientes = llamadas
+      estado.errorLlamadasRecientes = null
+    } catch (error) {
+      if (solicitud === solicitudLlamadasRecientes) estado.errorLlamadasRecientes = normalizarError(error)
+    }
+  }
+
   async function cargarLlamadas() {
-    const { datos, total } = await crmSupabaseService.obtenerLlamadas({
-      porPagina: 100,
-      ...filtrosRemotosActuales(),
-    })
+    const [{ datos, total }] = await Promise.all([
+      crmSupabaseService.obtenerLlamadas({ porPagina: 100, ...filtrosRemotosActuales() }),
+      cargarLlamadasRecientes(),
+    ])
 
     estado.llamadas = datos
     estado.totalLlamadas = total
@@ -361,6 +411,7 @@ export function useCrm() {
     estado.resumenLlamadas = todas.datos
     estado.llamadasHoy = hoy
     estado.llamadasVencidas = vencidas
+    estado.errorHistorialContactos = null
   }
 
   async function cargarNotificaciones() {
@@ -381,8 +432,9 @@ export function useCrm() {
       return []
     }
 
-    estado.historial = await crmSupabaseService.obtenerHistorial(llamadaId)
-    return estado.historial
+    const eventos = await crmSupabaseService.obtenerHistorial(llamadaId)
+    if (estado.llamadaSeleccionada?.id === llamadaId) estado.historial = eventos
+    return eventos
   }
 
   async function refrescarTablero() {
@@ -395,42 +447,77 @@ export function useCrm() {
 
   async function inicializarCrm() {
     estado.cargando = true
+    estado.cargandoContactos = true
+    estado.cargandoHistorialContactos = true
     estado.error = null
+    estado.errorContactos = null
+    estado.errorHistorialContactos = null
     estado.errorOperacion = null
 
     try {
       await cargarUsuario()
       await cargarPerfil()
       await cargarContexto()
-
-      await Promise.all([
-        cargarUsuarios(),
-        cargarProspectos(),
-        cargarMotivos(),
-        cargarResultados(),
-        cargarLlamadas(),
-        cargarResumenLlamadas(),
-        cargarNotificaciones(),
-      ])
-
-      try {
-        iniciarRealtime()
-      } catch (error) {
-        console.error('No se pudo iniciar Realtime del CRM.', error)
-      }
     } catch (error) {
       estado.error = normalizarError(error)
-    } finally {
+      estado.errorContactos = estado.error
       estado.cargando = false
+      estado.cargandoContactos = false
+      estado.cargandoHistorialContactos = false
+      return
     }
+
+    const contactos = cargarProspectos()
+      .catch(error => { estado.errorContactos = normalizarError(error) })
+      .finally(() => { estado.cargandoContactos = false })
+
+    const resumen = cargarResumenLlamadas()
+      .catch(error => {
+        estado.errorHistorialContactos = normalizarError(error)
+        throw error
+      })
+      .finally(() => { estado.cargandoHistorialContactos = false })
+
+    const resultados = await Promise.allSettled([
+      cargarUsuarios(),
+      cargarMotivos(),
+      cargarResultados(),
+      cargarLlamadas(),
+      resumen,
+      cargarNotificaciones(),
+    ])
+    const fallo = resultados.find(resultado => resultado.status === 'rejected')
+    if (fallo) estado.error = normalizarError(fallo.reason)
+    estado.cargando = false
+
+    try {
+      iniciarRealtime()
+    } catch (error) {
+      console.error('No se pudo iniciar Realtime del CRM.', error)
+    }
+
+    await contactos
+  }
+
+  let solicitudDetalle = 0
+
+  function cerrarDetalleLlamada() {
+    solicitudDetalle++
+    drawerAbierto.value = false
+    estado.llamadaSeleccionada = null
+    estado.historial = []
   }
 
   async function seleccionarLlamada(llamada) {
     if (!llamada?.id) return
 
+    const solicitud = ++solicitudDetalle
     drawerAbierto.value = true
-    estado.llamadaSeleccionada = await crmSupabaseService.obtenerLlamada(llamada.id)
-    await cargarHistorial(llamada.id)
+    const detalle = await crmSupabaseService.obtenerLlamada(llamada.id)
+    if (solicitud !== solicitudDetalle) return
+    estado.llamadaSeleccionada = detalle
+    const eventos = await crmSupabaseService.obtenerHistorial(llamada.id)
+    if (solicitud === solicitudDetalle) estado.historial = eventos
   }
 
   async function crearLlamada(formulario) {
@@ -448,7 +535,7 @@ export function useCrm() {
       prospectoPreseleccionadoId.value = ''
       modoFormularioLlamada.value = 'crear'
       llamadaEnEdicion.value = null
-      vistaActiva.value = 'llamadas'
+      if (vistaActiva.value !== 'panel') vistaActiva.value = 'llamadas'
       await refrescarTablero()
     } catch (error) {
       console.error('No fue posible programar la llamada.', error)
@@ -516,26 +603,58 @@ export function useCrm() {
     }
   }
 
+  async function reintentarLecturaFinalizacion(llamadaId) {
+    const finalizacion = estado.finalizaciones.get(llamadaId)
+    if (!finalizacion || finalizacion.recargando) return
+
+    finalizacion.recargando = true
+    try {
+      const lecturas = await Promise.allSettled([cargarLlamadas(), cargarResumenLlamadas(), cargarNotificaciones()])
+      if (estado.llamadaSeleccionada?.id === llamadaId) {
+        const llamada = await crmSupabaseService.obtenerLlamada(llamadaId)
+        if (estado.llamadaSeleccionada?.id === llamadaId) {
+          estado.llamadaSeleccionada = llamada
+          const eventos = await crmSupabaseService.obtenerHistorial(llamadaId)
+          if (estado.llamadaSeleccionada?.id === llamadaId) estado.historial = eventos
+        }
+        finalizacion.completadaEnLectura = llamada.estado === 'completada'
+      }
+      finalizacion.errorLectura = lecturas.some(lectura => lectura.status === 'rejected')
+    } catch {
+      finalizacion.errorLectura = true
+    } finally {
+      finalizacion.recargando = false
+    }
+  }
+
   async function finalizarLlamada(payload) {
-    estado.guardando = true
+    const { llamadaId, contesto, resultadoId, notas, duracion = null } = payload
+    if (estado.guardando || finalizacionesEnCurso.has(llamadaId) || estado.finalizaciones.has(llamadaId)) return
     estado.errorOperacion = null
 
-    try {
-      await crmSupabaseService.finalizarLlamada({
-        llamadaId: payload.llamadaId,
-        contesto: payload.contesto,
-        resultadoId: payload.resultadoId,
-        notas: payload.notas,
-      })
+    if (!llamadaId || typeof contesto !== 'boolean' || !duracionLlamadaValida(duracion)) {
+      estado.errorOperacion = 'Verifica la llamada, el resultado y la duración en minutos enteros.'
+      return
+    }
 
-      await Promise.all([cargarLlamadas(), cargarResumenLlamadas(), cargarNotificaciones()])
-      await seleccionarLlamada({ id: payload.llamadaId })
+    finalizacionesEnCurso.add(llamadaId)
+    estado.guardando = true
+    try {
+      await crmSupabaseService.finalizarLlamada({ llamadaId, contesto, resultadoId, notas, duracion })
     } catch (error) {
-      console.error('No fue posible finalizar la llamada.', error)
-      estado.errorOperacion = normalizarError(error)
+      if (error?.resultadoIncierto || /timeout|failed to fetch|network|abort/i.test(error?.message || '')) {
+        estado.finalizaciones.set(llamadaId, { confirmada: false, errorLectura: false, recargando: false })
+      } else {
+        estado.errorOperacion = normalizarError(error)
+      }
+      return
     } finally {
+      finalizacionesEnCurso.delete(llamadaId)
       estado.guardando = false
     }
+
+    estado.finalizaciones.set(llamadaId, { confirmada: true, errorLectura: false, recargando: false })
+    await reintentarLecturaFinalizacion(llamadaId)
   }
 
   async function crearSeguimiento(payload) {
@@ -582,21 +701,80 @@ export function useCrm() {
     }
   }
 
-  async function reprogramarLlamada(llamada, nuevaFecha) {
-    if (!llamada?.id || !nuevaFecha) return
-
-    estado.guardando = true
-    estado.errorOperacion = null
-
-    try {
-      await crmSupabaseService.reprogramarLlamada(llamada.id, nuevaFecha)
-      await refrescarTablero()
-    } catch (error) {
-      console.error('No fue posible reprogramar la llamada.', error)
-      estado.errorOperacion = normalizarError(error)
-    } finally {
-      estado.guardando = false
+  function actualizarFechaReprogramada(id, fechaProgramada, fechaActualizacion) {
+    const actualizar = llamada => llamada?.id === id
+      ? { ...llamada, fechaProgramada, ...(fechaActualizacion ? { fechaActualizacion } : {}) }
+      : llamada
+    estado.llamadaSeleccionada = actualizar(estado.llamadaSeleccionada)
+    for (const lista of ['llamadas', 'llamadasRecientes', 'resumenLlamadas', 'llamadasHoy', 'llamadasVencidas']) {
+      estado[lista] = estado[lista].map(actualizar)
     }
+  }
+
+  async function consultarReprogramacion() {
+    const resultado = estado.reprogramacion
+    if (!resultado || resultado.consultando) return
+
+    resultado.consultando = true
+    try {
+      const llamada = await crmSupabaseService.obtenerLlamada(resultado.id)
+      actualizarFechaReprogramada(resultado.id, llamada.fechaProgramada, llamada.fechaActualizacion)
+      resultado.fechaObservada = llamada.fechaProgramada
+      if (resultado.estado === 'incierta' &&
+        Date.parse(llamada.fechaProgramada) === Date.parse(resultado.fechaSolicitada)) {
+        resultado.estado = 'observada'
+        reprogramacionesInciertas.delete(resultado.id)
+      }
+      await refrescarTablero()
+      resultado.errorLectura = Boolean(estado.errorLlamadasRecientes && vistaActiva.value === 'panel')
+    } catch {
+      resultado.errorLectura = true
+    } finally {
+      resultado.consultando = false
+    }
+  }
+
+  async function reprogramarLlamada(llamada, nuevaFecha) {
+    if (!llamada?.id || !nuevaFecha || reprogramando.value || estado.reprogramacion?.consultando) return
+
+    const pendiente = reprogramacionesInciertas.get(llamada.id)
+    if (pendiente) {
+      estado.reprogramacion = pendiente
+      return
+    }
+
+    reprogramando.value = true
+    estado.errorOperacion = null
+    estado.reprogramacion = null
+
+    let guardada
+    try {
+      guardada = await crmSupabaseService.reprogramarLlamada(llamada.id, nuevaFecha)
+    } catch (error) {
+      if (error?.resultadoIncierto || /timeout|failed to fetch|network|abort/i.test(error?.message || '')) {
+        const resultado = reactive({ id: llamada.id, estado: 'incierta', fechaSolicitada: nuevaFecha })
+        estado.reprogramacion = resultado
+        reprogramacionesInciertas.set(llamada.id, resultado)
+        return 'incierta'
+      }
+      estado.errorOperacion = normalizarError(error)
+      return 'rechazada'
+    } finally {
+      reprogramando.value = false
+    }
+
+    actualizarFechaReprogramada(llamada.id, guardada?.fecha_programada ?? nuevaFecha, guardada?.fecha_actualizacion)
+    const resultado = reactive({ id: llamada.id, estado: 'confirmada', consultando: true })
+    estado.reprogramacion = resultado
+    try {
+      await refrescarTablero()
+      resultado.errorLectura = Boolean(estado.errorLlamadasRecientes && vistaActiva.value === 'panel')
+    } catch {
+      resultado.errorLectura = true
+    } finally {
+      resultado.consultando = false
+    }
+    return 'confirmada'
   }
 
   function solicitarCancelacion(llamada) {
@@ -605,6 +783,12 @@ export function useCrm() {
   }
 
   function solicitarReprogramacion(llamada) {
+    const pendiente = reprogramacionesInciertas.get(llamada.id)
+    if (pendiente) {
+      estado.reprogramacion = pendiente
+      return
+    }
+    estado.errorOperacion = null
     llamadaPendienteReprogramacion.value = llamada
     modalReprogramacion.value = true
   }
@@ -651,7 +835,8 @@ export function useCrm() {
   async function confirmarReprogramacion(payload) {
     if (!llamadaPendienteReprogramacion.value?.id || !payload?.fechaProgramada) return
 
-    await reprogramarLlamada(llamadaPendienteReprogramacion.value, payload.fechaProgramada)
+    const resultado = await reprogramarLlamada(llamadaPendienteReprogramacion.value, payload.fechaProgramada)
+    if (resultado !== 'confirmada' && resultado !== 'incierta') return
     modalReprogramacion.value = false
     llamadaPendienteReprogramacion.value = null
   }
@@ -660,6 +845,7 @@ export function useCrm() {
     if (!llamadaPendienteReasignacion.value?.id || !usuarioId) return
 
     await reasignarLlamada(llamadaPendienteReasignacion.value, usuarioId)
+    if (estado.errorOperacion) return
     modalReasignacion.value = false
     llamadaPendienteReasignacion.value = null
   }
@@ -755,8 +941,11 @@ export function useCrm() {
     reportes,
     inicializarCrm,
     cargarLlamadas,
+    cargarLlamadasRecientes,
+    refrescarResponsablesLlamadas,
     actualizarFiltros,
     seleccionarLlamada,
+    cerrarDetalleLlamada,
     crearLlamada,
     crearContacto,
     abrirFormularioContacto,
@@ -765,9 +954,12 @@ export function useCrm() {
     editarLlamada,
     iniciarLlamada,
     finalizarLlamada,
+    reintentarLecturaFinalizacion,
     crearSeguimiento,
     reasignarLlamada,
     reprogramarLlamada,
+    reprogramando,
+    consultarReprogramacion,
     solicitarCancelacion,
     solicitarReprogramacion,
     solicitarReasignacion,

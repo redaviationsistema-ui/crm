@@ -4,6 +4,8 @@ import BadgeMercado from '../components/BadgeMercado.vue'
 import { formatearFecha, normalizarTexto, resolverEstadoLlamada } from '../lib/crm'
 
 const props = defineProps({
+  cargandoHistorial: Boolean,
+  errorHistorial: { type: String, default: '' },
   rol: {
     type: String,
     default: 'ejecutivo',
@@ -276,7 +278,7 @@ watch(
       </label>
     </section>
 
-    <section class="tabla-contactos">
+    <section class="tabla-contactos" role="region" tabindex="0" aria-label="Tabla de contactos">
       <table class="solo-escritorio">
         <thead>
           <tr>
@@ -484,6 +486,9 @@ watch(
           </section>
         </div>
 
+        <p v-else-if="cargandoHistorial || errorHistorial" class="detalle-contenido" role="status">
+          {{ cargandoHistorial ? 'Consultando llamadas del contacto…' : `El historial de llamadas no está disponible. ${errorHistorial}` }}
+        </p>
         <div v-else-if="tabDetalle === 'llamadas'" class="detalle-contenido">
           <article
             v-for="llamada in prospectoActivo.llamadasRelacionadas"
@@ -551,12 +556,12 @@ watch(
 .panel-detalle {
   background: rgba(255, 255, 255, 0.9);
   border: 1px solid #dfe7f5;
-  border-radius: 24px;
-  box-shadow: 0 24px 60px rgba(12, 31, 61, 0.08);
+  border-radius: var(--radio-panel);
+  box-shadow: var(--sombra-panel);
 }
 
 .indicador-contacto {
-  padding: 1rem 1.1rem;
+  padding: var(--espacio-panel);
   display: grid;
   gap: 0.35rem;
 }
@@ -573,9 +578,9 @@ watch(
 }
 
 .panel-filtros {
-  padding: 1rem;
+  padding: var(--espacio-panel);
   display: grid;
-  grid-template-columns: minmax(220px, 2fr) repeat(4, minmax(0, 1fr));
+  grid-template-columns: minmax(165px, 2fr) repeat(4, minmax(0, 1fr));
   gap: 0.85rem;
 }
 
@@ -591,16 +596,18 @@ watch(
 
 .panel-filtros input,
 .panel-filtros select {
-  min-height: 3rem;
+  min-height: var(--altura-control);
   border: 1px solid #dbe5f4;
   border-radius: 14px;
-  padding: 0.8rem 0.95rem;
+  padding: 4px 8px;
   font: inherit;
+  min-width: 0;
+  width: 100%;
   background: #fff;
 }
 
 .tabla-contactos {
-  overflow: hidden;
+  overflow: auto;
 }
 
 table {
@@ -610,7 +617,8 @@ table {
 
 th,
 td {
-  padding: 1rem;
+  height: var(--altura-fila);
+  padding: 5px 8px;
   text-align: left;
   border-bottom: 1px solid #e7edf7;
   vertical-align: top;
@@ -747,12 +755,12 @@ th {
 }
 
 .tarjetas-contacto {
-  padding: 1rem;
+  padding: var(--espacio-panel);
   gap: 0.85rem;
 }
 
 .tarjeta-contacto {
-  padding: 1rem;
+  padding: var(--espacio-panel);
   display: grid;
   gap: 0.8rem;
 }
@@ -851,7 +859,7 @@ th {
 .bloque-detalle {
   border: 1px solid #e1eaf7;
   border-radius: 20px;
-  padding: 1rem;
+  padding: var(--espacio-panel);
   display: grid;
   gap: 0.85rem;
 }

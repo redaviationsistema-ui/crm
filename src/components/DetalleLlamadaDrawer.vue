@@ -8,6 +8,8 @@ import HistorialLlamada from './HistorialLlamada.vue'
 import { formatearFecha } from '../lib/crm'
 
 const props = defineProps({
+  finalizacion: { type: Object, default: null },
+  guardando: Boolean,
   llamada: {
     type: Object,
     default: null,
@@ -48,6 +50,7 @@ const emit = defineEmits([
   'guardar-resultado',
   'crear-seguimiento',
   'finalizar',
+  'reintentar-lectura',
 ])
 
 const tabDetalle = ref('resumen')
@@ -76,7 +79,7 @@ function iniciarYEnfocarSeguimiento() {
             <strong>{{ llamada.cliente.nombre }}</strong>
             <small>{{ llamada.cliente.empresa }}</small>
           </div>
-          <button class="cerrar" @click="$emit('cerrar')">✕</button>
+          <button type="button" class="cerrar" aria-label="Cerrar detalle de llamada" @click="$emit('cerrar')">✕</button>
         </div>
 
         <div class="resumen-topline">
@@ -149,12 +152,31 @@ function iniciarYEnfocarSeguimiento() {
         </div>
       </div>
 
+      <div v-if="finalizacion" class="detalle-seccion">
+        <p role="status">
+          {{ finalizacion.confirmada ? 'La llamada se finalizó.' : finalizacion.completadaEnLectura
+            ? 'La llamada figura como completada. No se recibió la confirmación de la solicitud.'
+            : 'No se pudo confirmar la finalización. Consulta el estado antes de tomar otra acción.' }}
+          <span v-if="finalizacion.errorLectura">No se pudo sincronizar la información.</span>
+        </p>
+        <button
+          v-if="finalizacion.errorLectura || (!finalizacion.confirmada && !finalizacion.completadaEnLectura)"
+          type="button"
+          class="accion-secundaria"
+          :disabled="finalizacion.recargando"
+          @click="$emit('reintentar-lectura', llamada.id)"
+        >
+          {{ finalizacion.recargando ? 'Consultando…' : 'Reintentar lectura' }}
+        </button>
+      </div>
+
       <div v-if="tabDetalle === 'seguimiento'" class="detalle-seccion">
         <FormularioResultado
           :llamada="llamada"
           :resultados="resultados"
           :usuarios="usuarios"
           :error="error"
+          :finalizacion-bloqueada="guardando || !!finalizacion"
           @guardar-resultado="$emit('guardar-resultado', $event)"
           @crear-seguimiento="$emit('crear-seguimiento', $event)"
           @finalizar="$emit('finalizar', $event)"
@@ -283,7 +305,7 @@ function iniciarYEnfocarSeguimiento() {
 }
 
 .accion-llamada {
-  min-height: 3rem;
+  min-height: var(--altura-control);
   border: 0;
   border-radius: 14px;
   background: #1167e8;

@@ -1,0 +1,39 @@
+:root {
+  --color-fondo: #f3f6fa;
+  --color-superficie: #fff;
+  --color-tinta: #142842;
+  --color-secundario: #51647d;
+  --color-marino: #0b1d35;
+  --color-accion: #1759ba;
+  --color-seleccion: #e9f1fe;
+  --color-borde: #d9e2ed;
+  --color-foco: #246ad2;
+  --color-alerta: #8c4717;
+  --color-fondo-alerta: #fff4e6;
+  --radio-control: 6px;
+  --radio-panel: 10px;
+  --sombra-panel: 0 1px 3px #1027440d;
+  --espacio-corto: 8px;
+  --espacio-panel: 12px;
+  --espacio-pagina: 16px;
+  --altura-barra: 52px;
+  --altura-control: 36px;
+  --altura-fila: 42px;
+  --ancho-navegacion: 216px;
+  --texto-base: 14px;
+  --texto-secundario: 12px;
+  --texto-titulo: 21px;
+}
+
+/* Los puntos de corte se aplican en las reglas de medios de cada vista. */
+@media (max-width: 1024px) {
+  :root { --ancho-navegacion: 184px; }
+}
+
+@media (max-width: 767px) {
+  :root {
+    --altura-control: 44px;
+    --espacio-pagina: 12px;
+    --texto-titulo: 19px;
+  }
+}

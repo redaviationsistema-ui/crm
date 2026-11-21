@@ -561,7 +561,7 @@ function guardar(forzar = false) {
 .formulario textarea {
   box-sizing: border-box;
   width: 100%;
-  min-height: 2.4rem;
+  min-height: var(--altura-control);
   border: 1px solid #dbe5f4;
   border-radius: 10px;
   padding: 0.42rem 0.65rem;
@@ -628,7 +628,7 @@ function guardar(forzar = false) {
 .acciones button {
   flex: 0 1 auto;
   min-width: 8.75rem;
-  min-height: 2.4rem;
+  min-height: var(--altura-control);
   border: 0;
   border-radius: 10px;
   font-weight: 700;

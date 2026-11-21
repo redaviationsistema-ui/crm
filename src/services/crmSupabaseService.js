@@ -10,8 +10,9 @@ import {
   adaptarResultadoDesdeSupabase,
   crearPayloadLlamada,
 } from '@/adapters/crmAdapters'
-import { construirFechaProgramada, normalizarCorreo, normalizarTelefono } from '@/lib/crm'
+import { construirFechaProgramada, duracionLlamadaValida, esEjecutivoActivo, normalizarCorreo, normalizarTelefono } from '@/lib/crm'
 import { supabase } from '@/lib/supabase'
+import { exigirEscriturasStagingHabilitadas } from '@/lib/stagingWriteProtection'
 
 const BUCKET_IMAGENES = 'crm-llamadas-imagenes'
 
@@ -142,6 +143,7 @@ export async function obtenerProspecto(id) {
 }
 
 export async function crearProspecto(formulario) {
+  exigirEscriturasStagingHabilitadas('crear prospecto')
   const user = await obtenerUsuarioAutenticado()
   const telefono = normalizarTelefono(formulario.telefono)
   const whatsapp = normalizarTelefono(formulario.whatsapp)
@@ -181,6 +183,7 @@ export async function crearProspecto(formulario) {
 }
 
 export async function actualizarProspecto(id, cambios) {
+  exigirEscriturasStagingHabilitadas('editar prospecto')
   const payload = crearCambiosContacto(cambios)
   if (!Object.keys(payload).length) throw new Error('No hay cambios para guardar.')
 
@@ -204,6 +207,7 @@ export async function obtenerLlamadas({
   mercado = null,
   estado = null,
   prioridad = null,
+  orden = 'fecha_programada',
 } = {}) {
   const desde = (pagina - 1) * porPagina
   const hasta = desde + porPagina - 1
@@ -216,9 +220,13 @@ export async function obtenerLlamadas({
   if (estado) query = query.eq('estado', estado)
   if (prioridad) query = query.eq('prioridad', prioridad)
 
-  const { data, error, count } = await query
-    .order('fecha_programada', { ascending: true })
-    .range(desde, hasta)
+  const porActividad = orden === 'fecha_creacion' || orden === 'fecha_actualizacion'
+  if (porActividad) {
+    query = query.order(orden, { ascending: false, nullsFirst: false }).order('id', { ascending: true })
+  } else {
+    query = query.order('fecha_programada', { ascending: true })
+  }
+  const { data, error, count } = await query.range(desde, hasta)
 
   if (error) throw error
 
@@ -226,6 +234,48 @@ export async function obtenerLlamadas({
     datos: (data || []).map(adaptarLlamadaDesdeSupabase),
     total: count || 0,
   }
+}
+
+function actividadLlamada(llamada) {
+  return Math.max(...[llamada.fechaCreacion, llamada.fechaActualizacion].map(fecha => {
+    const instante = Date.parse(fecha)
+    if (!Number.isFinite(instante)) return -Infinity
+    // Date.parse conserva milisegundos. PostgreSQL puede distinguir microsegundos.
+    const fraccion = /\.(\d+)/.exec(fecha)?.[1] || ''
+    return instante * 1000 + Number(fraccion.padEnd(6, '0').slice(3, 6))
+  }))
+}
+
+function compararActividad(a, b) {
+  return (actividadLlamada(b) - actividadLlamada(a)) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)
+}
+
+export async function obtenerLlamadasRecientes(filtros, coincide) {
+  const limite = 4
+  async function obtenerCandidatas(orden) {
+    const candidatas = new Map()
+    const porPagina = coincide ? 100 : limite
+    for (let pagina = 1; candidatas.size < limite; pagina++) {
+      const { datos } = await obtenerLlamadas({ ...filtros, orden, pagina, porPagina })
+      for (const llamada of datos) {
+        if ((!coincide || coincide(llamada)) && !candidatas.has(llamada.id)) candidatas.set(llamada.id, llamada)
+      }
+      if (datos.length < porPagina) break
+    }
+    return [...candidatas.values()].slice(0, limite)
+  }
+
+  // Toda fila del top global está entre las primeras cuatro de al menos una de las dos fechas.
+  const grupos = await Promise.all([
+    obtenerCandidatas('fecha_creacion'),
+    obtenerCandidatas('fecha_actualizacion'),
+  ])
+  const porId = new Map()
+  for (const llamada of grupos.flat()) {
+    const anterior = porId.get(llamada.id)
+    if (!anterior || compararActividad(llamada, anterior) < 0) porId.set(llamada.id, llamada)
+  }
+  return [...porId.values()].sort(compararActividad).slice(0, limite)
 }
 
 export async function obtenerLlamada(id) {
@@ -262,7 +312,23 @@ export async function obtenerLlamadasVencidas() {
   return (data || []).map(adaptarLlamadaDesdeSupabase)
 }
 
+async function verificarResponsableLlamada(id) {
+  if (typeof id !== 'string' || !id.trim()) throw new Error('Selecciona un ejecutivo activo.')
+
+  const { data, error } = await supabase
+    .from('perfiles')
+    .select('id,rol,activo')
+    .eq('id', id)
+    .maybeSingle()
+
+  if (error) throw error
+  if (data?.id !== id || !esEjecutivoActivo(data)) {
+    throw new Error('El responsable debe ser un ejecutivo activo y estar disponible para asignación.')
+  }
+}
+
 export async function crearLlamada(formulario) {
+  exigirEscriturasStagingHabilitadas('crear llamada')
   const user = await obtenerUsuarioAutenticado()
   if (!formulario.prospectoId) {
     throw new Error('Selecciona un contacto.')
@@ -285,6 +351,7 @@ export async function crearLlamada(formulario) {
     user.id,
   )
 
+  await verificarResponsableLlamada(formulario.asignadoAId)
   const { data, error } = await supabase.from('llamadas').insert(payload).select().single()
 
   if (error) throw error
@@ -293,11 +360,13 @@ export async function crearLlamada(formulario) {
 }
 
 export async function actualizarLlamada(llamadaId, cambios) {
+  exigirEscriturasStagingHabilitadas('editar llamada')
   const payload = {
     motivo_id: cambios.motivoId || null,
     motivo_personalizado: cambios.motivoPersonalizado || null,
     descripcion: cambios.descripcion || null,
     prioridad: cambios.prioridad || 'media',
+    fecha_actualizacion: new Date().toISOString(),
   }
 
   const { data, error } = await supabase
@@ -313,6 +382,7 @@ export async function actualizarLlamada(llamadaId, cambios) {
 }
 
 export async function iniciarLlamada(llamadaId) {
+  exigirEscriturasStagingHabilitadas('iniciar llamada')
   const { data, error } = await supabase.rpc('iniciar_llamada', {
     p_llamada_id: llamadaId,
   })
@@ -322,20 +392,42 @@ export async function iniciarLlamada(llamadaId) {
   return data
 }
 
-export async function finalizarLlamada({ llamadaId, contesto, resultadoId, notas }) {
-  const { data, error } = await supabase.rpc('finalizar_llamada', {
-    p_llamada_id: llamadaId,
-    p_contesto: contesto,
-    p_resultado_id: resultadoId,
-    p_notas: notas || null,
-  })
+export async function finalizarLlamada({ llamadaId, contesto, resultadoId, notas, duracion = null }) {
+  exigirEscriturasStagingHabilitadas('finalizar llamada')
+  if (!duracionLlamadaValida(duracion)) {
+    throw new Error('Indica una duración en minutos enteros no negativos.')
+  }
 
-  if (error) throw error
+  // La RPC existente no admite duración manual. Conservar su firma evita una segunda escritura no atómica.
+  let respuesta
+  try {
+    respuesta = await supabase.rpc('finalizar_llamada', {
+      p_llamada_id: llamadaId,
+      p_contesto: contesto,
+      p_resultado_id: resultadoId,
+      p_notas: notas || null,
+    })
+  } catch (error) {
+    throw Object.assign(new Error('No se recibió la confirmación de finalización.', { cause: error }), {
+      resultadoIncierto: true,
+    })
+  }
+
+  const { data, error, status } = respuesta
+  if (error) {
+    if (status === 0 || status === 408 || status >= 500 || !error.code) {
+      throw Object.assign(new Error('No se recibió la confirmación de finalización.', { cause: error }), {
+        resultadoIncierto: true,
+      })
+    }
+    throw error
+  }
 
   return data
 }
 
 export async function crearSeguimiento(formulario) {
+  exigirEscriturasStagingHabilitadas('crear seguimiento')
   if (!formulario.llamadaPadreId) {
     throw new Error('No fue posible identificar la llamada base del seguimiento.')
   }
@@ -355,6 +447,7 @@ export async function crearSeguimiento(formulario) {
     p_descripcion: formulario.descripcion || null,
   }
 
+  await verificarResponsableLlamada(formulario.asignadoAId)
   const { data, error } = await supabase.rpc('crear_seguimiento_llamada', {
     ...payload,
   })
@@ -365,10 +458,13 @@ export async function crearSeguimiento(formulario) {
 }
 
 export async function reasignarLlamada(llamadaId, nuevoUsuarioId) {
+  exigirEscriturasStagingHabilitadas('reasignar llamada')
+  await verificarResponsableLlamada(nuevoUsuarioId)
   const { data, error } = await supabase
     .from('llamadas')
     .update({
       asignado_a: nuevoUsuarioId,
+      fecha_actualizacion: new Date().toISOString(),
     })
     .eq('id', llamadaId)
     .select()
@@ -380,27 +476,43 @@ export async function reasignarLlamada(llamadaId, nuevoUsuarioId) {
 }
 
 export async function reprogramarLlamada(llamadaId, nuevaFecha) {
-  const { data, error } = await supabase
-    .from('llamadas')
-    .update({
-      fecha_programada: nuevaFecha,
+  exigirEscriturasStagingHabilitadas('reprogramar llamada')
+  let respuesta
+  try {
+    respuesta = await supabase
+      .from('llamadas')
+      .update({ fecha_programada: nuevaFecha })
+      .eq('id', llamadaId)
+      .select()
+      .single()
+  } catch (error) {
+    throw Object.assign(new Error('No se recibió la confirmación de reprogramación.', { cause: error }), {
+      resultadoIncierto: true,
     })
-    .eq('id', llamadaId)
-    .select()
-    .single()
+  }
 
-  if (error) throw error
-
+  const { data, error, status } = respuesta
+  if (error) {
+    if (status === 0 || status === 408 || status >= 500) {
+      throw Object.assign(new Error('No se recibió la confirmación de reprogramación.', { cause: error }), {
+        resultadoIncierto: true,
+      })
+    }
+    if (status === 403 && !error.code) throw Object.assign(new Error('No tienes permisos para realizar esta acción.'), { code: '42501' })
+    throw error
+  }
   return data
 }
 
 export async function cancelarLlamada(llamadaId, motivo) {
+  exigirEscriturasStagingHabilitadas('cancelar llamada')
   const user = await obtenerUsuarioAutenticado()
 
   const { data, error } = await supabase
     .from('llamadas')
     .update({
       estado: 'cancelada',
+      fecha_actualizacion: new Date().toISOString(),
       cancelada_por: user.id,
       fecha_cancelacion: new Date().toISOString(),
       motivo_cancelacion: motivo || null,
@@ -498,6 +610,7 @@ export async function obtenerImagenes(llamadaId) {
 }
 
 export async function subirImagen(llamadaId, file) {
+  exigirEscriturasStagingHabilitadas('subir imagen de llamada')
   const user = await obtenerUsuarioAutenticado()
   const extension = file.name.includes('.') ? file.name.split('.').pop() : 'bin'
   const nombreSeguro = `${crypto.randomUUID()}.${extension}`
@@ -533,6 +646,7 @@ export async function subirImagen(llamadaId, file) {
 }
 
 export async function eliminarImagen(imagen) {
+  exigirEscriturasStagingHabilitadas('eliminar imagen de llamada')
   const rutaStorage = imagen.rutaStorage || imagen.ruta_storage || imagen.path
 
   if (rutaStorage) {

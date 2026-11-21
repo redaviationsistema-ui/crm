@@ -31,5 +31,5 @@ async function guardar(){
   </form></main>
 </template>
 <style scoped>
-.acceso{min-height:100vh;display:grid;place-items:center;background:#f4f7fa;color:#17304e;padding:1rem}.acceso form{background:white;padding:2rem;border:1px solid #cbd6e2;border-radius:8px;max-width:460px;width:100%;box-sizing:border-box}.acceso label{display:grid;gap:.4rem;margin:1rem 0}.acceso input,.acceso button{padding:.7rem;border:1px solid #b7c6d8;border-radius:5px}.acceso button{background:#173f70;color:white;cursor:pointer}.acceso [role=alert]{color:#9e2f2f}
+.acceso{min-height:100vh;display:grid;place-items:center;background:#f4f7fa;color:#17304e;padding:1rem}.acceso form{background:white;padding:var(--espacio-pagina);border:1px solid #cbd6e2;border-radius:var(--radio-panel);max-width:460px;width:100%;box-sizing:border-box}.acceso label{display:grid;gap:.4rem;margin:1rem 0}.acceso input,.acceso button{min-height:var(--altura-control);padding:4px 8px;border:1px solid #b7c6d8;border-radius:5px}.acceso button{background:#173f70;color:white;cursor:pointer}.acceso [role=alert]{color:#9e2f2f}
 </style>

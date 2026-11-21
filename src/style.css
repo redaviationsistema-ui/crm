@@ -1,10 +1,9 @@
 :root {
   font-family:
     "Segoe UI", "SF Pro Display", -apple-system, BlinkMacSystemFont, sans-serif;
-  color: #10213c;
-  background:
-    radial-gradient(circle at top left, rgba(17, 103, 232, 0.12), transparent 28%),
-    linear-gradient(180deg, #f9fbff 0%, #f6f8fc 100%);
+  color: var(--color-tinta);
+  background: var(--color-fondo);
+  font-size: var(--texto-base);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
@@ -43,11 +42,11 @@ button {
 .crm-shell {
   min-height: 100vh;
   display: grid;
-  grid-template-columns: 230px minmax(0, 1fr);
+  grid-template-columns: var(--ancho-navegacion) minmax(0, 1fr);
 }
 
 .crm-shell.con-detalle {
-  grid-template-columns: 230px minmax(0, 1fr) minmax(360px, 420px);
+  grid-template-columns: var(--ancho-navegacion) minmax(0, 1fr) minmax(300px, 350px);
 }
 
 .crm-main {
@@ -59,15 +58,15 @@ button {
 }
 
 .contenido {
-  padding: 1.25rem;
+  padding: var(--espacio-pagina);
   display: grid;
-  gap: 1.25rem;
+  gap: var(--espacio-panel);
 }
 
 .panel,
 .vista-listado {
   display: grid;
-  gap: 1.25rem;
+  gap: var(--espacio-panel);
 }
 
 .hero-panel {
@@ -75,7 +74,7 @@ button {
     linear-gradient(135deg, rgba(7, 23, 47, 0.98), rgba(17, 103, 232, 0.95)),
     #07172f;
   color: #fff;
-  border-radius: 18px;
+  border-radius: var(--radio-panel);
   padding: 1.4rem 1.5rem;
   display: flex;
   justify-content: space-between;
@@ -91,9 +90,7 @@ button {
 
 .hero-panel p,
 .titulo-seccion p,
-.bloque-head p,
-.seguimiento-item p,
-.seguimiento-item span {
+.bloque-head p {
   margin: 0;
   color: #6d7d98;
 }
@@ -122,15 +119,15 @@ button {
 
 .boton-primario,
 .boton-secundario {
-  min-height: 3rem;
+  min-height: var(--altura-control);
   border: 0;
-  border-radius: 16px;
-  padding: 0.85rem 1.1rem;
+  border-radius: var(--radio-control);
+  padding: 0 12px;
   font-weight: 700;
 }
 
 .boton-primario {
-  background: #1167e8;
+  background: var(--color-accion);
   color: #fff;
 }
 
@@ -146,20 +143,19 @@ button {
   gap: 1rem;
 }
 
-.panel-bloques,
-.seguimientos-grid {
+.panel-bloques {
   display: grid;
   grid-template-columns: minmax(0, 2fr) minmax(280px, 1fr);
-  gap: 1.25rem;
+  gap: var(--espacio-panel);
 }
 
 .bloque,
 .tabla-prospectos {
-  border-radius: 18px;
+  border-radius: var(--radio-panel);
   background: #fff;
   border: 1px solid #e4eaf2;
   box-shadow: 0 8px 24px rgba(15, 23, 42, 0.05);
-  padding: 1.25rem;
+  padding: var(--espacio-pagina);
 }
 
 .bloque-head {
@@ -171,8 +167,7 @@ button {
 }
 
 .bloque-head strong,
-.titulo-seccion h2,
-.seguimiento-item strong {
+.titulo-seccion h2 {
   color: #07172f;
 }
 
@@ -208,7 +203,7 @@ button {
 .tabla-prospectos th,
 .tabla-prospectos td {
   text-align: left;
-  padding: 0.95rem;
+  padding: 7px 10px;
   border-bottom: 1px solid #edf2fb;
 }
 
@@ -216,36 +211,6 @@ button {
   color: #60708d;
   font-size: 0.82rem;
   text-transform: uppercase;
-}
-
-.seguimientos-grid {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
-.seguimiento-lista {
-  display: grid;
-  gap: 0.8rem;
-}
-
-.seguimiento-item {
-  border: 1px solid #dfe7f5;
-  border-radius: 18px;
-  background: #fbfdff;
-  padding: 0.95rem;
-  text-align: left;
-  display: grid;
-  gap: 0.35rem;
-}
-
-.seguimiento-meta {
-  display: flex;
-  justify-content: space-between;
-  gap: 1rem;
-  align-items: center;
-}
-
-.seguimiento-meta span {
-  color: #60708d;
 }
 
 .overlay-mobile,
@@ -259,7 +224,7 @@ button {
 }
 
 .campo-select select {
-  min-height: 3rem;
+  min-height: var(--altura-control);
   border: 1px solid #dbe5f4;
   border-radius: 14px;
   padding: 0.8rem 0.95rem;
@@ -267,7 +232,7 @@ button {
 
 @media (max-width: 1439px) {
   .crm-shell {
-    grid-template-columns: 230px minmax(0, 1fr);
+    grid-template-columns: var(--ancho-navegacion) minmax(0, 1fr);
   }
 
   .grid-indicadores {
@@ -277,7 +242,7 @@ button {
 
 @media (max-width: 1199px) {
   .crm-shell {
-    grid-template-columns: 230px minmax(0, 1fr);
+    grid-template-columns: var(--ancho-navegacion) minmax(0, 1fr);
   }
 
   .panel-bloques {
@@ -286,8 +251,7 @@ button {
 }
 
 @media (max-width: 1024px) {
-  .grid-indicadores,
-  .seguimientos-grid {
+  .grid-indicadores {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
@@ -299,8 +263,9 @@ button {
 }
 
 @media (max-width: 767px) {
-  .crm-shell {
-    grid-template-columns: 1fr;
+  .crm-shell,
+  .crm-shell.con-detalle {
+    grid-template-columns: minmax(0, 1fr);
     width: 100%;
     max-width: 100%;
     min-width: 0;
@@ -318,12 +283,11 @@ button {
     width: 100%;
     max-width: 100%;
     min-width: 0;
-    padding: 1rem 1rem 5.75rem;
+    padding: var(--espacio-pagina) var(--espacio-pagina) 5.75rem;
   }
 
-  .grid-indicadores,
-  .seguimientos-grid {
-    grid-template-columns: 1fr;
+  .grid-indicadores {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .panel-bloques {
@@ -370,7 +334,7 @@ button {
   .nav-movil button {
     border: 0;
     background: transparent;
-    min-height: 3rem;
+    min-height: var(--altura-control);
     min-width: 0;
     padding: 0.5rem 0.2rem;
     color: #44618e;
@@ -386,4 +350,12 @@ button {
   .nav-movil button:focus-visible {
     background: #eef4ff;
   }
+}
+
+.contenido, .contenido > *, .vista-listado { min-width: 0; }
+.crm-main h1 { font-size: var(--texto-titulo); line-height: 1.2; }
+.crm-main h2 { font-size: 16px; }
+:where(button, a, input, select, textarea, summary, [tabindex]):focus-visible {
+  outline: 2px solid var(--color-foco);
+  outline-offset: 2px;
 }

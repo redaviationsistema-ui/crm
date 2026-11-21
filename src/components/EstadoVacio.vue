@@ -20,9 +20,9 @@ defineProps({
 
 <style scoped>
 .estado-vacio {
-  padding: 2rem;
+  padding: var(--espacio-pagina);
   border: 1px dashed #c9d8ef;
-  border-radius: 24px;
+  border-radius: var(--radio-panel);
   background: #fbfcff;
   text-align: center;
 }
@@ -34,6 +34,6 @@ defineProps({
 
 .estado-vacio p {
   margin: 0.5rem 0 0;
-  color: #6b7c97;
+  color: var(--color-secundario);
 }
 </style>

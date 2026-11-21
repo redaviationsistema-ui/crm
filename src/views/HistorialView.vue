@@ -16,7 +16,7 @@ defineProps({
 
 <template>
   <section class="vista-listado">
-    <div class="tabla-prospectos">
+    <div class="tabla-prospectos" tabindex="0" role="region" aria-label="Historial de llamadas">
       <table>
         <thead>
           <tr>

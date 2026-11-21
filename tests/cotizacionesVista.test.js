@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import {nextTick} from 'vue'
 import {cargarComponente,montar,buscar,texto} from './helpers/vueHarness.js'
-const Component=await cargarComponente('src/views/CotizacionesView.vue')
+const Component=await cargarComponente('src/modulos/cotizaciones/vistas/ListaCotizaciones.vue')
 async function ticks(){for(let i=0;i<6;i++)await nextTick()}
 function boton(root,t){return buscar(root,n=>n.tag==='button'&&texto(n).includes(t))[0]}
 function campo(root,t,tag='input'){const label=buscar(root,n=>n.tag==='label'&&texto(n).includes(t))[0];return buscar(label,n=>n.tag===tag)[0]}
@@ -15,8 +15,8 @@ async function llenar(root){
   await ticks()
 }
 test('la demostración inyectada conecta formulario, oportunidad, vista previa y guardado local',async()=>{
-  const {crearCotizacionesDemostracionService}=await import('../src/services/cotizacionesService.js')
-  const vista=montar(Component,{servicioInyectado:crearCotizacionesDemostracionService()})
+  const {crearServicioCotizacionesDemostracion}=await import('../src/modulos/cotizaciones/servicios/servicioCotizaciones.js')
+  const vista=montar(Component,{servicioInyectado:crearServicioCotizacionesDemostracion()})
   try{
     await ticks();boton(vista.root,'Nueva cotización').props.onClick();await ticks();await llenar(vista.root)
     boton(vista.root,'Vista previa').props.onClick();await ticks()
@@ -31,8 +31,8 @@ test('la demostración inyectada conecta formulario, oportunidad, vista previa y
   }finally{vista.unmount()}
 })
 test('error de guardado mantiene conceptos y no muestra confirmacion falsa',async()=>{
-  const {crearCotizacionesDemostracionService}=await import('../src/services/cotizacionesService.js')
-  const servicio=crearCotizacionesDemostracionService()
+  const {crearServicioCotizacionesDemostracion}=await import('../src/modulos/cotizaciones/servicios/servicioCotizaciones.js')
+  const servicio=crearServicioCotizacionesDemostracion()
   servicio.guardar=async()=>{throw Error('Almacenamiento bloqueado')}
   const vista=montar(Component,{servicioInyectado:servicio})
   try{

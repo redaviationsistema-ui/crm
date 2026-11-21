@@ -3,7 +3,7 @@ defineProps({ etapas: { type: Array, default: () => [] }, oportunidades: { type:
 const emit = defineEmits(['abrir'])
 </script>
 <template>
-  <section class="pipeline" aria-label="Pipeline comercial">
+  <section class="pipeline" tabindex="0" aria-label="Pipeline comercial">
     <section v-for="etapa in etapas" :key="etapa.id" :aria-label="etapa.nombre">
       <h3>{{ etapa.nombre }}{{ etapa.activo === false ? ' (inactiva)' : '' }}</h3>
       <p v-if="!oportunidades.some(o => o.etapaId === etapa.id && (!etapa.embudoId || o.embudoId === etapa.embudoId))">Sin oportunidades con estos filtros.</p>
@@ -15,8 +15,8 @@ const emit = defineEmits(['abrir'])
 </template>
 
 <style scoped>
-.pipeline { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(240px,1fr); gap: 1rem; overflow-x: auto; padding-bottom: 1rem; }
-.pipeline > section { background: #edf3fb; border-radius: 14px; padding: 1rem; min-height: 180px; }
-button { display: block; width: 100%; padding: 1rem; margin-bottom: .7rem; text-align: left; background: white; border: 1px solid #d4dfed; border-radius: 10px; cursor: pointer; }
+.pipeline { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(198px,1fr); gap: var(--espacio-corto); overflow-x: auto; padding-bottom: var(--espacio-corto); }
+.pipeline > section { background: #edf3fb; border-radius: var(--radio-panel); padding: var(--espacio-panel); min-height: 104px; }
+button { display: block; width: 100%; padding: 8px; margin-bottom: var(--espacio-corto); text-align: left; background: white; border: 1px solid #d4dfed; border-radius: 10px; cursor: pointer; }
 p { color: #52647f; }
 </style>

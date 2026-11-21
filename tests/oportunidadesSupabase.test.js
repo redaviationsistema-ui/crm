@@ -1,8 +1,8 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { columnasOportunidades, evaluarModoOportunidades, configuracionOportunidades } from '../src/config/oportunidadesBackend.js'
-import { normalizarImporte, fechaSupabase, validarColumnasOportunidades, crearAdaptadorOportunidadesSupabase } from '../src/services/oportunidadesSupabaseAdapter.js'
-import { crearServicioOportunidadesNavegador } from '../src/services/oportunidadesService.js'
+import { columnasOportunidades, evaluarModoOportunidades, configuracionOportunidades } from '../src/modulos/oportunidades/esquemas/contratoOportunidadesSupabase.js'
+import { normalizarImporte, fechaSupabase, validarColumnasOportunidades, crearAdaptadorOportunidadesSupabase } from '../src/modulos/oportunidades/adaptadores/adaptadorOportunidadesSupabase.js'
+import { crearServicioOportunidadesNavegador } from '../src/modulos/oportunidades/servicios/servicioOportunidades.js'
 
 // El esquema del doble reproduce las columnas confirmadas por el usuario.
 const columnas=columnasOportunidades
@@ -15,7 +15,7 @@ function fixture(){
   const tablas={
     oportunidades:[{id:uuid,prospecto_id:'cliente-1',embudo_id:'embudo-1',etapa_id:'etapa-1',titulo:'Prueba de demostración',descripcion:'Descripción',responsable_id:'agente-1',creado_por:'agente-1',valor_estimado:'125000.50',moneda:'USD',prioridad:'media',estado:'abierta',proximo_seguimiento:modelo.proximoSeguimiento,fecha_actualizacion:modelo.actualizadoEn,fecha_creacion:'2026-11-12T10:00:00Z',fecha_cierre:null}],
     embudos:[{id:'embudo-1',nombre:'Venta aeronaves',descripcion:null,activo:true,fecha_creacion:'2026-11-12T10:00:00Z'}],
-    etapas:[{id:'etapa-1',embudo_id:'embudo-1',nombre:'Nueva',orden:0,tipo:'normal',activo:true}],
+    etapas:[{id:'etapa-1',embudo_id:'embudo-1',nombre:'Nueva',orden:0,tipo:'abierta',activo:true}],
     prospectos:[{id:'cliente-1',nombre:'CRM_TEST_Ana',apellidos:'De demostración',empresa:'Empresa sintética'}],
     perfiles:[{id:'agente-1',nombre:'CRM_TEST_Agente',apellidos:'De demostración',activo:true}],
     eventos_oportunidad:[{id:'evento-1',oportunidad_id:uuid,tipo:'creada',fecha_creacion:'2026-11-12T12:00:00Z',usuario_id:'agente-1',datos_anteriores:null,datos_nuevos:{titulo:'Prueba de demostración'}}],
@@ -52,7 +52,7 @@ test('rechaza service_role y claves secretas en frontend',()=>{
 test('factory no crea cliente real cuando faltan verificaciones',()=>{
   let clienteCreado=false
   const servicio=crearServicioOportunidadesNavegador({env,config:configuracionOportunidades,obtenerCliente:()=>{clienteCreado=true}})
-  assert.equal(servicio.modo,'demostracion');assert.equal(clienteCreado,false);assert.ok(servicio.backendBloqueado)
+  assert.equal(servicio.modo,'bloqueado');assert.equal(clienteCreado,false);assert.ok(servicio.backendBloqueado)
 })
 test('carga datos autorizados y conserva valores decimales e historial',async()=>{
   const f=fixture(),datos=await f.servicio.cargar()
@@ -126,12 +126,12 @@ test('mapeo definitivo no admite servicio de embudo ni estado de etapa de demost
 test('consulta embudos activos y ordena etapas conservando estado real independiente de tipo',async()=>{
   const f=fixture()
   f.tablas.embudos.push({...f.tablas.embudos[0],id:'inactivo',activo:false})
-  f.tablas.etapas.push({...f.tablas.etapas[0],id:'etapa-2',orden:5,tipo:'cierre'})
+  f.tablas.etapas.push({...f.tablas.etapas[0],id:'etapa-2',orden:5,tipo:'ganada'})
   f.tablas.oportunidades[0].estado='estado_del_servidor'
   const datos=await f.servicio.cargar()
   assert.equal(datos.embudos.length,1)
   assert.deepEqual(datos.etapas.map(e=>e.orden),[0,5])
-  assert.equal(datos.etapas[0].tipo,'normal');assert.equal(datos.etapas[0].estado,undefined)
+  assert.equal(datos.etapas[0].tipo,'abierta');assert.equal(datos.etapas[0].estado,undefined)
   assert.equal(datos.oportunidades[0].estado,'estado_del_servidor')
   assert.ok(f.llamadas.some(c=>c.tabla==='embudos' && c.filtro?.[0]==='activo' && c.filtro[1]===true))
   assert.ok(f.llamadas.some(c=>c.tabla==='etapas' && c.orden==='orden'))
@@ -183,4 +183,54 @@ test('RPC exitosa sin registro legible no devuelve un guardado de demostración 
   const f=fixture();f.estado.respuesta='22222222-2222-4222-8222-222222222222'
   await assert.rejects(f.servicio.guardar(modelo),e=>e.confirmacionPendiente && e.registroId===f.estado.respuesta)
   assert.equal(f.llamadas.filter(c=>c.nombre).length,1)
+})
+
+test('la fábrica distingue demo, adaptador real simulado y fallo de construcción', async () => {
+  const f = fixture()
+  const construir = (opciones) => crearServicioOportunidadesNavegador({ env, config: config(), ...opciones })
+  const demo = construir({ env: { ...env, VITE_OPORTUNIDADES_MODO: 'demo' } })
+  assert.equal(demo.modo, 'demostracion')
+  assert.ok((await demo.cargar()).oportunidades.length)
+  const real = construir({ obtenerCliente: () => f.cliente })
+  assert.equal(real.modo, 'supabase')
+  assert.equal((await real.cargar()).oportunidades[0].id, uuid)
+  for (const opciones of [{}, { obtenerCliente: () => f.cliente, config: { ...config(), columnas: {} } }]) {
+    const bloqueado = construir(opciones)
+    assert.equal(bloqueado.modo, 'bloqueado')
+    assert.equal(bloqueado.permiteGestionEtapas, false)
+    await assert.rejects(bloqueado.cargar(), /cliente autenticado|mapeo/)
+    await assert.rejects(bloqueado.guardar(modelo))
+  }
+})
+
+test('un timeout de creación permite recargar y bloquea reenvíos incluso desde otro adaptador', async () => {
+  const f = fixture()
+  let rpc = 0
+  f.cliente.rpc = async () => { rpc++; return { error: { code: 'GATEWAY_TIMEOUT' }, status: 408 } }
+  const alta = { ...modelo, id: null }
+  await assert.rejects(f.servicio.guardar(alta), { confirmacionPendiente: true })
+  await f.servicio.cargar()
+  const otro = crearAdaptadorOportunidadesSupabase({ obtenerCliente: () => f.cliente, env, config: config() })
+  await assert.rejects(otro.guardar(alta), { confirmacionPendiente: true })
+  assert.equal(rpc, 1)
+})
+
+test('alta real usa moneda y prioridad confirmadas y solo una etapa abierta del mismo embudo', async () => {
+  const f = fixture()
+  f.tablas.etapas.push({ ...f.tablas.etapas[0], id: 'cerrada', tipo: 'ganada' })
+  f.tablas.etapas.push({ ...f.tablas.etapas[0], id: 'ajena', embudo_id: 'otro' })
+  for (const cambios of [{ moneda: 'GBP' }, { prioridad: 'crítica' }, { etapaId: 'cerrada' }, { etapaId: 'ajena' }, { titulo: ' ' }]) {
+    await assert.rejects(f.servicio.guardar({ ...modelo, id: null, ...cambios }))
+  }
+  assert.equal(f.llamadas.filter(c => c.nombre).length, 0)
+  await f.servicio.guardar({ ...modelo, id: null, moneda: 'EUR', prioridad: 'urgente' })
+  assert.equal(f.llamadas.find(c => c.nombre).args.p_prioridad, 'urgente')
+})
+
+test('se eliminan etapas repetidas sin perder la asociación con el embudo', async () => {
+  const f = fixture()
+  f.tablas.etapas.push({ ...f.tablas.etapas[0] }, { ...f.tablas.etapas[0], id: 'ajena', embudo_id: 'otro' })
+  const datos = await f.servicio.cargar()
+  assert.deepEqual(datos.etapas.map(e => [e.id, e.embudoId]), [['ajena', 'otro'], ['etapa-1', 'embudo-1']])
+  assert.equal(datos.clientes[0].id, f.tablas.prospectos[0].id)
 })

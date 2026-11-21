@@ -1,19 +1,23 @@
 <script setup>
 import { computed, onMounted, reactive, ref, toRaw } from 'vue'
-import FormularioOportunidad from '@/components/oportunidades/FormularioOportunidad.vue'
-import PipelineBoard from '@/components/oportunidades/PipelineBoard.vue'
-import { crearServicioOportunidadesNavegador, filtrarOportunidades } from '@/services/oportunidadesService'
-import { SERVICIOS } from '@/domain/oportunidades'
+import FormularioOportunidad from '../componentes/FormularioOportunidad.vue'
+import TableroOportunidades from '../componentes/TableroOportunidades.vue'
+import { crearServicioOportunidadesNavegador, filtrarOportunidades } from '../servicios/servicioOportunidades.js'
+import { SERVICIOS } from '../dominio/oportunidades.js'
 const props = defineProps({ servicioInyectado: { type: Object, default: null }, obtenerClienteSupabase: { type: Function, default: null } })
 const servicio = props.servicioInyectado || crearServicioOportunidadesNavegador({obtenerCliente:props.obtenerClienteSupabase})
 const esSupabase = servicio.modo === 'supabase'
+const esDemostracion = servicio.modo === 'demostracion'
+const bloqueado = servicio.modo === 'bloqueado'
+const resultadoIncierto = ref(false)
+const conflicto = ref('')
 let solicitudHistorial = 0
 const datos = ref({ clientes: [], empresas: [], responsables: [], embudos: [], etapas: [], oportunidades: [] })
 const error = ref(''), mensaje = ref(''), cargando = ref(true), guardando = ref(false)
 const formulario = ref(null), seleccionadoId = ref(''), gestionEtapas = ref(false), confirmarReset = ref(false)
 const etapa = reactive({ id: '', nombre: '', embudoId: 'demo-comercial', estado: 'abierta', orden: 0 })
 const filtros = reactive({ embudoId: '', busqueda: '', responsableId: '', servicio: '', estado: '', etapaId: '', moneda: '', prioridad: '' })
-const etapas = computed(() => [...datos.value.etapas].sort((a,b) => a.orden - b.orden || a.nombre.localeCompare(b.nombre)))
+const etapas = computed(() => [...datos.value.etapas].sort((a,b) => a.orden - b.orden || (esSupabase ? a.id.localeCompare(b.id) : a.nombre.localeCompare(b.nombre))))
 const embudosTablero = computed(() => {
   const catalogo = [...datos.value.embudos]
   for (const oportunidad of datos.value.oportunidades) {
@@ -44,15 +48,17 @@ async function cargar() {
 }
 onMounted(cargar)
 function nueva() {
+  if (bloqueado || resultadoIncierto.value) return
   error.value = ''; mensaje.value = ''
   const embudo = datos.value.embudos.find(e => e.id === filtros.embudoId) || datos.value.embudos[0]
   formulario.value = { titulo: '', descripcion: '', clienteId: '', empresaId: '', responsableId: '', servicio: embudo?.servicio || '', embudoId: embudo?.id || '',
-    etapaId: etapas.value.find(e => e.embudoId === embudo?.id && (esSupabase ? e.activo !== false : e.estado === 'abierta'))?.id || '', estado: 'abierta', moneda: 'USD', prioridad: 'media',
+    etapaId: etapas.value.find(e => e.embudoId === embudo?.id && (esSupabase ? e.activo === true && e.tipo === 'abierta' : e.estado === 'abierta'))?.id || '', estado: 'abierta', moneda: 'USD', prioridad: 'media',
     valorEstimado: '', proximoSeguimiento: new Date(Date.now()+86400000).toISOString(), motivoPerdida: '' }
 }
 async function editar(id) {
   const registro = datos.value.oportunidades.find(o => o.id === id)
-  if (!registro) return
+  if (!registro || resultadoIncierto.value || guardando.value) return
+  conflicto.value = ''
   error.value = ''; mensaje.value = ''; seleccionadoId.value = id
   formulario.value = structuredClone(toRaw(registro))
   await cargarHistorial(id)
@@ -68,7 +74,7 @@ async function cargarHistorial(id) {
   } catch(e) { if (solicitud === solicitudHistorial) { limpiarSesion(e); error.value = e.message } }
 }
 async function guardar(modelo) {
-  if (guardando.value) return
+  if (guardando.value || bloqueado || resultadoIncierto.value || conflicto.value) return
   guardando.value = true; error.value = ''; mensaje.value = ''
   try {
     const registro = await servicio.guardar(modelo)
@@ -80,9 +86,34 @@ async function guardar(modelo) {
     const recargada = await cargar()
     if (!recargada) mensaje.value += ' La recarga falló; no repitas el guardado.'
     if (recargada) await cargarHistorial(registro.id)
-  } catch(e) { limpiarSesion(e); mensaje.value = ''; error.value = e.message; if(e.confirmacionPendiente) { formulario.value = null; if(e.registroId) seleccionadoId.value = e.registroId } }
+  } catch (e) {
+    limpiarSesion(e)
+    mensaje.value = ''
+    error.value = e.message
+    if (e.guardadoConfirmado) {
+      mensaje.value = 'Supabase confirmó el guardado. Recarga para consultar la oportunidad.'
+      formulario.value = null
+      seleccionadoId.value = e.registroId
+    } else if (e.confirmacionPendiente) {
+      resultadoIncierto.value = true
+    } else if (e.code === '40001') {
+      conflicto.value = modelo.id
+    }
+  }
   finally { guardando.value = false }
 }
+async function consultarVersionActual() {
+  const id = conflicto.value
+  if (!id || !(await cargar())) return
+  if (datos.value.oportunidades.some(oportunidad => oportunidad.id === id)) {
+    await editar(id)
+  } else {
+    formulario.value = null
+    conflicto.value = ''
+    error.value = 'La oportunidad ya no está disponible bajo tu acceso actual.'
+  }
+}
+
 async function guardarEtapa() {
   if (guardando.value) return
   guardando.value = true; error.value = ''; mensaje.value = ''
@@ -111,19 +142,27 @@ function responsable(id) { return datos.value.responsables.find(r => r.id === id
 </script>
 <template>
   <section class="oportunidades">
-    <div v-if="!esSupabase" class="aviso-demo" role="note"><strong>Modo de demostración: datos locales</strong><p>Clientes, empresas, responsables y oportunidades son de demostración. Los cambios se guardan en {{ servicio.persistencia }}; no se envían a Supabase.</p></div>
-    <div v-else class="aviso-demo" role="note"><strong>Supabase · staging autenticado</strong><p>Los registros y etapas se consultan bajo RLS. Los guardados utilizan las RPC existentes.</p></div>
+    <div v-if="esDemostracion" class="aviso-demo" role="note">
+      <strong>Modo de demostración</strong>
+      <p>Los cambios se guardan en {{ servicio.persistencia }}. Los datos son de prueba y permanecen en este navegador.</p>
+    </div>
+    <div v-else-if="esSupabase" class="aviso-demo" role="note"><strong>Supabase · staging autenticado</strong>
+      <p>Los registros y etapas se consultan bajo RLS. Los guardados utilizan las RPC existentes.</p>
+    </div>
+
     <p v-if="servicio.backendBloqueado" role="status">{{ servicio.backendBloqueado }}</p>
-    <header><div><h1>Oportunidades comerciales</h1><p>{{ visibles.length }} de {{ datos.oportunidades.length }} oportunidades{{ esSupabase ? '' : ' de demostración' }}</p></div>
-      <button :disabled="cargando || guardando || !!formulario" @click="nueva">+ Nueva oportunidad</button>
+    <header><div><h1>Oportunidades comerciales</h1><p>{{ visibles.length }} de {{ datos.oportunidades.length }} oportunidades{{ esDemostracion ? ' de demostración' : '' }}</p></div>
+      <button :disabled="bloqueado || resultadoIncierto || cargando || guardando || !!formulario" @click="nueva">+ Nueva oportunidad</button>
       <button v-if="servicio.permiteGestionEtapas" :disabled="guardando" @click="gestionEtapas = !gestionEtapas">Gestionar etapas</button>
-      <button v-if="!esSupabase" :disabled="guardando" @click="confirmarReset = !confirmarReset">Restablecer demostración</button>
+      <button v-if="esDemostracion" :disabled="guardando" @click="confirmarReset = !confirmarReset">Restablecer demostración</button>
       <button :disabled="cargando || guardando" @click="cargar">Recargar</button>
     </header>
     <div v-if="confirmarReset" class="panel" role="alert"><p>Se eliminarán únicamente los cambios de esta demostración local.</p><button :disabled="guardando" @click="restablecer">Confirmar restablecimiento</button><button @click="confirmarReset = false">Cancelar</button></div>
     <p v-if="error" role="alert" class="error">{{ error }}</p><p v-if="mensaje" role="status">{{ mensaje }}</p>
     <p v-if="cargando" role="status">Cargando oportunidades{{ esSupabase ? '' : ' de demostración' }}…</p>
-    <FormularioOportunidad v-if="formulario" :key="formulario.id || 'nueva'" :inicial="formulario" :modo-supabase="esSupabase" :clientes="datos.clientes" :empresas="datos.empresas" :responsables="datos.responsables" :embudos="datos.embudos" :etapas="etapas" :guardando="guardando" :error="error" @guardar="guardar" @cancelar="formulario = null; error = ''" />
+    <p v-if="resultadoIncierto" role="status">Guardado sin confirmar. Recargar consulta los datos y no reenvía la operación.</p>
+    <button v-if="conflicto" type="button" :disabled="cargando" @click="consultarVersionActual">Abrir versión actual y descartar cambios locales</button>
+    <FormularioOportunidad v-if="formulario" :key="formulario.id || 'nueva'" :inicial="formulario" :modo-supabase="esSupabase" :clientes="datos.clientes" :empresas="datos.empresas" :responsables="datos.responsables" :embudos="datos.embudos" :etapas="etapas" :guardando="guardando" :guardado-bloqueado="resultadoIncierto || !!conflicto" :error="error" @guardar="guardar" @cancelar="formulario = null; conflicto = ''; error = ''" />
     <section v-if="gestionEtapas && servicio.permiteGestionEtapas" class="panel">
       <h2>Etapas de demostración</h2>
       <div class="etapas-lista"><button v-for="e in etapas" :key="e.id" :disabled="guardando" @click="Object.assign(etapa,e)">{{ e.orden }} · {{ e.nombre }} · {{ e.estado }}</button></div>
@@ -140,16 +179,17 @@ function responsable(id) { return datos.value.responsables.find(r => r.id === id
       <label>Embudo <select v-model="filtros.embudoId" @change="filtros.etapaId = ''"><option value="">Todos los embudos</option><option v-for="e in datos.embudos" :key="e.id" :value="e.id">{{ e.nombre }}</option></select></label>
       <label>Buscar cliente o empresa <input v-model="filtros.busqueda" type="search" /></label>
       <label>Responsable <select v-model="filtros.responsableId"><option value="">Todos</option><option v-for="r in datos.responsables" :key="r.id" :value="r.id">{{ r.nombre }}</option></select></label>
-      <label v-if="!esSupabase">Servicio <select v-model="filtros.servicio"><option value="">Todos</option><option v-for="s in SERVICIOS" :key="s">{{ s }}</option></select></label>
+      <label v-if="esDemostracion">Servicio <select v-model="filtros.servicio"><option value="">Todos</option><option v-for="s in SERVICIOS" :key="s">{{ s }}</option></select></label>
       <label>Estado <select v-model="filtros.estado"><option value="">Todos</option><option v-for="estado in estadosFiltro" :key="estado">{{ estado }}</option></select></label>
       <label>Etapa <select v-model="filtros.etapaId"><option value="">Todas</option><option v-for="e in etapas" :key="e.id" :value="e.id">{{ e.nombre }}</option></select></label>
       <label>Moneda <input v-model="filtros.moneda" maxlength="3" placeholder="USD" @input="filtros.moneda = filtros.moneda.toUpperCase()" /></label>
       <label>Prioridad <select v-model="filtros.prioridad"><option value="">Todas</option><option>alta</option><option>media</option><option>baja</option></select></label>
       <button @click="Object.keys(filtros).forEach(k => filtros[k] = '')">Limpiar filtros</button>
     </div>
+    <p v-if="esSupabase && !cargando && !error && !embudosTablero.length" role="status">No hay embudos disponibles para tu sesión.</p>
     <section v-for="embudo in embudosTablero.filter(e => !filtros.embudoId || e.id === filtros.embudoId)" :key="embudo.id">
       <h2>{{ embudo.nombre }}</h2>
-      <PipelineBoard :etapas="etapasEmbudo(embudo.id)" :oportunidades="visibles.filter(o => o.embudoId === embudo.id)" @abrir="editar" />
+      <TableroOportunidades :etapas="etapasEmbudo(embudo.id)" :oportunidades="visibles.filter(o => o.embudoId === embudo.id)" @abrir="editar" />
     </section>
     <section v-if="seleccionado" class="panel">
       <h2>{{ seleccionado.titulo || cliente(seleccionado.clienteId) }} · {{ seleccionado.embudoNombre || seleccionado.servicio }}</h2>

@@ -1,5 +1,5 @@
-import { validarOportunidad } from '../domain/oportunidades.js'
-import { columnasOportunidades, evaluarModoOportunidades } from '../config/oportunidadesBackend.js'
+import { validarOportunidad } from '../dominio/oportunidades.js'
+import { columnasOportunidades, evaluarModoOportunidades } from '../esquemas/contratoOportunidadesSupabase.js'
 function errorSesion(mensaje) { const error = new Error(mensaje); error.sesionInvalida = true; return error }
 export function validarColumnasOportunidades(columnas) {
   for (const [tabla,mapa] of Object.entries(columnasOportunidades)) {
@@ -53,6 +53,15 @@ export function errorOportunidades(error) {
 }
 const proyectar = (fila, mapa) => Object.fromEntries(Object.entries(mapa).map(([campo,columna]) => [campo, fila[columna]]))
 const seleccion = mapa => [...new Set(Object.entries(mapa).map(([campo,columna]) => campo === 'valorEstimado' ? `${columna}::text` : columna))].join(',')
+
+// Comparte el bloqueo entre consumidores del mismo cliente durante la sesión de la aplicación.
+const confirmacionesPorCliente = new WeakMap()
+
+function errorConfirmacionPendiente() {
+  return Object.assign(new Error('No se pudo confirmar el guardado. Consulta la lista sin repetir la operación.'), {
+    confirmacionPendiente: true,
+  })
+}
 
 export function crearAdaptadorOportunidadesSupabase({ obtenerCliente, env, config }) {
   const estadoModo = evaluarModoOportunidades(env, config)
@@ -114,7 +123,9 @@ export function crearAdaptadorOportunidadesSupabase({ obtenerCliente, env, confi
         leer(cliente,'prospectos',{ id:'id',nombre:'nombre',apellidos:'apellidos',empresa:'empresa' }),
         leer(cliente,'perfiles',{ id:'id',nombre:'nombre',apellidos:'apellidos',activo:'activo' }),
       ])
-      const embudos=embudosRaw.map(f=>proyectar(f,columnas.embudos)), etapas=etapasRaw.map(f=>proyectar(f,columnas.etapas)).sort((a,b)=>a.orden-b.orden || a.id.localeCompare(b.id))
+      const embudos = embudosRaw.map(f => proyectar(f, columnas.embudos))
+      const etapas = [...new Map(etapasRaw.map(fila => [fila[columnas.etapas.id], proyectar(fila, columnas.etapas)])).values()]
+        .sort((a, b) => a.orden - b.orden || a.id.localeCompare(b.id))
       const clientes=contactos.map(f=>({id:f.id,nombre:[f.nombre,f.apellidos].filter(Boolean).join(' '),empresaId:f.empresa || ''}))
       const empresas=[...new Set(contactos.map(f=>f.empresa).filter(Boolean))].map(nombre=>({id:nombre,nombre}))
       const oportunidades=filas.map(f=>adaptar(f,{clientes,embudos}))
@@ -133,13 +144,15 @@ export function crearAdaptadorOportunidadesSupabase({ obtenerCliente, env, confi
         const etapas=(await leer(cliente,'etapas',columnas.etapas)).map(f=>proyectar(f,columnas.etapas))
         const errores=validarOportunidad(modelo,etapas,{modoSupabase:true})
         if (Object.keys(errores).length) throw new Error(Object.values(errores).join('. '))
-        if (!modelo.titulo?.trim()) throw new Error('El título es obligatorio.')
         if (modelo.id) fechaSupabase(modelo.actualizadoEn,{nullable:false})
         if (modelo.id) {
           const originales = await leer(cliente,'oportunidades',columnas.oportunidades,[columnas.oportunidades.id,modelo.id])
           if (originales.length !== 1) throw new Error('La oportunidad no existe o no está autorizada.')
           const original = proyectar(originales[0],columnas.oportunidades)
           if (original.clienteId !== modelo.clienteId || original.embudoId !== modelo.embudoId) throw new Error('No se puede cambiar el cliente ni el embudo de una oportunidad existente mediante esta RPC.')
+          if (etapas.find(etapa => etapa.id === modelo.etapaId)?.activo !== true && original.etapaId !== modelo.etapaId) {
+            throw new Error('Selecciona una etapa activa del embudo.')
+          }
         }
         const comunes={p_titulo:modelo.titulo.trim(),p_descripcion:modelo.descripcion?.trim() || null,
           p_valor:normalizarImporte(modelo.valorEstimado),p_moneda:modelo.moneda,p_prioridad:modelo.prioridad,
@@ -148,12 +161,36 @@ export function crearAdaptadorOportunidadesSupabase({ obtenerCliente, env, confi
         const args=modelo.id?{p_id:modelo.id,...comunes,p_fecha_esperada:modelo.actualizadoEn}
           :{p_prospecto:modelo.clienteId,p_embudo:modelo.embudoId,...comunes}
         // No se envían actor, rol, estado, creador ni campos administrativos del formulario.
-        const {data,error}=await cliente.rpc(nombre,args)
-        if(error) throw errorOportunidades(error)
-        if(typeof data!=='string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(data)) {
-          const pendiente=new Error('La RPC respondió sin un UUID verificable. Recarga antes de repetir la operación.')
-          pendiente.confirmacionPendiente=true; throw pendiente
+        if (!confirmacionesPorCliente.has(cliente)) confirmacionesPorCliente.set(cliente, new Map())
+        const operaciones = confirmacionesPorCliente.get(cliente)
+        const clave = JSON.stringify([usuarioInicial, modelo.id || null])
+        if (operaciones.has(clave)) throw operaciones.get(clave)
+        operaciones.set(clave, new Error('Ya hay un guardado en curso.'))
+
+        let respuesta
+        try {
+          respuesta = await cliente.rpc(nombre, args)
+        } catch {
+          const pendiente = errorConfirmacionPendiente()
+          operaciones.set(clave, pendiente)
+          throw pendiente
         }
+        const { data, error, status } = respuesta
+        if (error) {
+          if (!error.code || status === 0 || status === 408 || status >= 500) {
+            const pendiente = errorConfirmacionPendiente()
+            operaciones.set(clave, pendiente)
+            throw pendiente
+          }
+          operaciones.delete(clave)
+          throw errorOportunidades(error)
+        }
+        if (typeof data !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(data)) {
+          const pendiente = errorConfirmacionPendiente()
+          operaciones.set(clave, pendiente)
+          throw pendiente
+        }
+        operaciones.delete(clave)
         try {
           const registro = await registroConfirmado(cliente,data)
           const eventos = await leer(cliente,'eventos_oportunidad',columnas.eventos,[columnas.eventos.oportunidadId,data])
@@ -161,7 +198,7 @@ export function crearAdaptadorOportunidadesSupabase({ obtenerCliente, env, confi
           return registro
         } catch (error) {
           const pendiente = new Error('Supabase aceptó el guardado, pero no se pudo recargar el registro y su historial. Recarga antes de volver a editar; no repitas la creación.')
-          pendiente.confirmacionPendiente=true; pendiente.registroId=data
+          pendiente.guardadoConfirmado = true; pendiente.confirmacionPendiente = true; pendiente.registroId = data
           throw pendiente
         }
       } finally {guardando=false}

@@ -1,5 +1,5 @@
-import { calcularCotizacion, fechaCotizacionValida, validarCotizacion } from '../domain/cotizaciones.js'
-import { evaluarModoCotizaciones, tablasCotizaciones, validarColumnasCotizaciones } from '../config/cotizacionesBackend.js'
+import { calcularCotizacion, fechaCotizacionValida, validarCotizacion } from '../dominio/cotizaciones.js'
+import { evaluarModoCotizaciones, tablasCotizaciones, validarColumnasCotizaciones } from '../esquemas/contratoCotizacionesSupabase.js'
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const ESTADOS = new Set(['borrador', 'enviada', 'aceptada', 'rechazada', 'vencida', 'cancelada'])

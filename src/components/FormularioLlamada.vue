@@ -1,6 +1,6 @@
 <script setup>
 import { computed, reactive, ref, watch } from 'vue'
-import { obtenerEtiquetaMercado } from '@/lib/crm'
+import { esEjecutivoActivo, obtenerEtiquetaMercado } from '@/lib/crm'
 import SelectorProspecto from './SelectorProspecto.vue'
 import SelectorUsuario from './SelectorUsuario.vue'
 
@@ -50,7 +50,7 @@ const formulario = reactive({
   motivoId: '',
   motivoPersonalizado: '',
   descripcion: '',
-  asignadoAId: props.usuarioActualId || '',
+  asignadoAId: '',
   prioridad: 'media',
   fecha: '',
   hora: '',
@@ -60,6 +60,17 @@ const prospectoActivo = computed(() =>
   props.prospectos.find((prospecto) => prospecto.id === formulario.prospectoId) || null,
 )
 const esEdicion = computed(() => props.modo === 'editar')
+const responsablesElegibles = computed(() => props.usuarios.filter(esEjecutivoActivo))
+const responsableHistorico = computed(() => props.llamada?.asignadoANombre || props.llamada?.asignadoAId || 'Sin asignar')
+
+function esResponsableElegible(id) {
+  return responsablesElegibles.value.some(usuario => usuario.id === id)
+}
+
+function responsableInicial() {
+  return [props.usuarioActualId, prospectoActivo.value?.responsableId].find(esResponsableElegible) || ''
+}
+
 const mostrarMotivoPersonalizado = computed(() => {
   const motivo = props.motivos.find((item) => item.id === formulario.motivoId)
   return motivo?.nombre?.trim().toLowerCase() === 'otro'
@@ -72,11 +83,10 @@ const mercadoSeleccionado = computed(() =>
 )
 
 watch(
-  () => formulario.prospectoId,
+  [responsablesElegibles, () => formulario.prospectoId, () => props.usuarioActualId],
   () => {
-    if (!formulario.asignadoAId && !props.usuarioActualId && prospectoActivo.value?.responsableId) {
-      formulario.asignadoAId = prospectoActivo.value.responsableId
-    }
+    if (esEdicion.value || !props.abierto) return
+    if (!formulario.asignadoAId) formulario.asignadoAId = responsableInicial()
   },
 )
 
@@ -91,7 +101,7 @@ watch(
         formulario.motivoId = props.llamada.motivoId || ''
         formulario.motivoPersonalizado = props.llamada.motivoPersonalizado || ''
         formulario.descripcion = props.llamada.descripcion || ''
-        formulario.asignadoAId = props.llamada.asignadoAId || props.usuarioActualId || ''
+        formulario.asignadoAId = props.llamada.asignadoAId || ''
         formulario.prioridad = props.llamada.prioridad || 'media'
         formulario.fecha = fecha ? fecha.toISOString().slice(0, 10) : ''
         formulario.hora = fecha ? fecha.toTimeString().slice(0, 5) : ''
@@ -100,20 +110,14 @@ watch(
         formulario.motivoId = ''
         formulario.motivoPersonalizado = ''
         formulario.descripcion = ''
-        formulario.asignadoAId = props.usuarioActualId || formulario.asignadoAId || ''
+        formulario.asignadoAId = responsableInicial()
         formulario.prioridad = 'media'
         formulario.fecha = ''
         formulario.hora = ''
       }
     }
   },
-)
-
-watch(
-  () => props.usuarioActualId,
-  (usuarioActualId) => {
-    formulario.asignadoAId = usuarioActualId || ''
-  },
+  { immediate: true },
 )
 
 watch(
@@ -145,7 +149,7 @@ function limpiar() {
   formulario.motivoId = ''
   formulario.motivoPersonalizado = ''
   formulario.descripcion = ''
-  formulario.asignadoAId = props.usuarioActualId || ''
+  formulario.asignadoAId = responsableInicial()
   formulario.prioridad = 'media'
   formulario.fecha = ''
   formulario.hora = ''
@@ -172,8 +176,8 @@ function validarFormulario() {
     return 'Selecciona un motivo.'
   }
 
-  if (!formulario.asignadoAId) {
-    return 'Selecciona un responsable.'
+  if (!esEdicion.value && !esResponsableElegible(formulario.asignadoAId)) {
+    return 'Selecciona un ejecutivo activo.'
   }
 
   if (!formulario.fecha) {
@@ -253,7 +257,11 @@ function guardar() {
           />
         </label>
 
-        <SelectorUsuario v-model="formulario.asignadoAId" :usuarios="usuarios" />
+        <label v-if="esEdicion">
+          <span>Asignado a</span>
+          <input :value="responsableHistorico" readonly />
+        </label>
+        <SelectorUsuario v-else v-model="formulario.asignadoAId" :usuarios="responsablesElegibles" etiqueta="Asignado a" />
 
         <label>
           <span>Prioridad</span>
@@ -303,7 +311,7 @@ function guardar() {
   width: min(100%, 560px);
   min-height: 100%;
   background: #fff;
-  padding: 1.3rem;
+  padding: var(--espacio-pagina);
   display: grid;
   gap: 1rem;
   overflow: auto;
@@ -364,10 +372,10 @@ function guardar() {
 .formulario textarea,
 :deep(select) {
   width: 100%;
-  min-height: 3rem;
+  min-height: var(--altura-control);
   border: 1px solid #dbe5f4;
   border-radius: 14px;
-  padding: 0.8rem 0.95rem;
+  padding: 5px 9px;
   font: inherit;
 }
 
@@ -391,7 +399,7 @@ function guardar() {
 
 .acciones button {
   flex: 1;
-  min-height: 3rem;
+  min-height: var(--altura-control);
   border: 0;
   border-radius: 14px;
   font-weight: 700;

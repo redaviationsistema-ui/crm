@@ -1,6 +1,6 @@
 <script setup>
 import {computed,reactive,ref,watch} from 'vue'
-import {calcularCotizacion,validarCotizacion,MONEDAS_COTIZACION,TRANSICIONES_COTIZACION} from '@/domain/cotizaciones'
+import {calcularCotizacion,validarCotizacion,MONEDAS_COTIZACION,TRANSICIONES_COTIZACION} from '../dominio/cotizaciones.js'
 const props=defineProps({inicial:{type:Object,required:true},oportunidades:{type:Array,default:()=>[]},guardando:Boolean,error:{type:String,default:''},modoDemostracion:Boolean,modoPersistido:Boolean,bloqueadoPorConfirmacion:Boolean})
 const emit=defineEmits(['guardar','previsualizar','cancelar'])
 const modelo=reactive({...props.inicial,conceptos:props.inicial.conceptos.map(c=>({...c}))})
@@ -53,5 +53,5 @@ function enviar(evento){
   </form>
 </template>
 <style scoped>
-.formulario-cotizacion{padding:1.2rem;border:1px solid #c7d6e9;border-radius:14px;background:white}fieldset{border:0;padding:0;min-width:0}legend{font-weight:700;margin-bottom:1rem}.campos{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:1rem}label,.campo-servidor{display:grid;gap:.4rem}.campo-servidor p{margin:0;padding:.65rem;border:1px solid #e0e7f0;border-radius:8px;background:#f7f9fc}input,select,textarea{padding:.65rem;border:1px solid #bacbe0;border-radius:8px;box-sizing:border-box;width:100%}.partida{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:.8rem;padding:1rem 0;border-bottom:1px solid #d9e3f1}.partida h3{grid-column:1/-1;margin:0}.acciones{display:flex;flex-wrap:wrap;gap:.7rem;margin-top:1rem}button{padding:.7rem;border:1px solid #acc1dd;border-radius:8px;cursor:pointer}[role=alert]{color:#a42121}
+.formulario-cotizacion{padding:var(--espacio-panel);border:1px solid #c7d6e9;border-radius:var(--radio-panel);background:white}fieldset{border:0;padding:0;min-width:0}legend{font-weight:700;margin-bottom:1rem}.campos{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:1rem}label,.campo-servidor{display:grid;gap:.4rem}.campo-servidor p{margin:0;min-height:var(--altura-control);padding:4px 8px;border:1px solid #e0e7f0;border-radius:8px;background:#f7f9fc}input,select,textarea{min-height:var(--altura-control);padding:4px 8px;border:1px solid #bacbe0;border-radius:8px;box-sizing:border-box;width:100%}.partida{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:.8rem;padding:1rem 0;border-bottom:1px solid #d9e3f1}.partida h3{grid-column:1/-1;margin:0}.acciones{display:flex;flex-wrap:wrap;gap:.7rem;margin-top:1rem}button{min-height:var(--altura-control);padding:4px 9px;border:1px solid #acc1dd;border-radius:8px;cursor:pointer}[role=alert]{color:#a42121}
 </style>

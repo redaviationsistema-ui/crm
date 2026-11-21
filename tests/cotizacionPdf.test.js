@@ -1,8 +1,8 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
-import {prepararCotizacionPdf,generarCotizacionPdf,crearDescargadorPdf,cargarRecursosPdf,descargarBlobPdf} from '../src/services/cotizacionPdf.js'
-import {calcularCotizacion} from '../src/domain/cotizaciones.js'
+import {prepararCotizacionPdf,generarCotizacionPdf,crearDescargadorPdf,cargarRecursosPdf,descargarBlobPdf} from '../src/modulos/cotizaciones/utilidades/cotizacionPdf.js'
+import {calcularCotizacion} from '../src/modulos/cotizaciones/dominio/cotizaciones.js'
 const recursos=Object.fromEntries([['logo','public/logoo.png'],['regular','public/fonts/NotoSans-Regular.ttf'],['bold','public/fonts/NotoSans-Bold.ttf']].map(([k,p])=>[k,new Uint8Array(fs.readFileSync(p))]))
 function cotizacion(n=1){
   const conceptos=Array.from({length:n},(_,i)=>({descripcion:`Concepto ${i+1}: inspección técnica de aeronave`,cantidad:'3',precioUnitario:'0.10'}))

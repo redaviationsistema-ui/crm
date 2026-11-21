@@ -1,4 +1,6 @@
 <script setup>
+import { vDialogoModal } from '../compartido/directivas/dialogoModal.js'
+
 import { ref, watch } from 'vue'
 
 const props = defineProps({
@@ -23,9 +25,16 @@ watch(
 </script>
 
 <template>
-  <div v-if="abierto" class="modal-overlay" @click.self="$emit('cancelar')">
+  <dialog
+    v-if="abierto"
+    v-dialogo-modal
+    class="dialogo-llamada"
+    aria-labelledby="titulo-cancelar-llamada"
+    @cancel.prevent="$emit('cancelar')"
+    @click.self="$emit('cancelar')"
+  >
     <section class="modal">
-      <strong>Cancelar llamada</strong>
+      <strong id="titulo-cancelar-llamada">Cancelar llamada</strong>
       <p>¿Seguro que deseas cancelar esta llamada?</p>
 
       <label>
@@ -38,24 +47,26 @@ watch(
         <button class="peligro" @click="$emit('confirmar', motivo)">Cancelar llamada</button>
       </div>
     </section>
-  </div>
+  </dialog>
 </template>
 
 <style scoped>
-.modal-overlay {
-  position: fixed;
-  inset: 0;
+.dialogo-llamada {
+  width: min(calc(100% - 2rem), 420px);
+  max-height: calc(100% - 2rem);
+  margin: auto;
+  padding: 0;
+  border: 1px solid var(--color-borde);
+  border-radius: var(--radio-panel);
+  overflow: auto;
+}
+
+.dialogo-llamada::backdrop {
   background: rgba(7, 23, 47, 0.36);
-  z-index: 55;
-  display: grid;
-  place-items: center;
-  padding: 1rem;
 }
 
 .modal {
-  width: min(100%, 420px);
-  padding: 1.3rem;
-  border-radius: 22px;
+  padding: var(--espacio-pagina);
   background: #fff;
   display: grid;
   gap: 0.8rem;
@@ -75,7 +86,7 @@ textarea {
   border: 1px solid #dbe5f4;
   border-radius: 14px;
   min-height: 6rem;
-  padding: 0.8rem 0.95rem;
+  padding: 5px 9px;
   font: inherit;
   resize: vertical;
 }
@@ -87,7 +98,7 @@ textarea {
 
 .modal-acciones button {
   flex: 1;
-  min-height: 3rem;
+  min-height: var(--altura-control);
   border: 0;
   border-radius: 14px;
   font-weight: 700;

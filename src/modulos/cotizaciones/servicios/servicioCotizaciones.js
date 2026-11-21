@@ -1,13 +1,12 @@
-import {crearOportunidadesService,crearServicioOportunidadesNavegador} from './oportunidadesService.js'
-import {calcularCotizacion,validarCotizacion,TRANSICIONES_COTIZACION} from '../domain/cotizaciones.js'
-import {configuracionCotizaciones, evaluarModoCotizaciones} from '../config/cotizacionesBackend.js'
-import {configuracionOportunidades} from '../config/oportunidadesBackend.js'
-import {crearAdaptadorCotizacionesSupabase} from './cotizacionesSupabaseAdapter.js'
+import {crearServicioOportunidadesDemostracion,crearServicioOportunidadesNavegador} from '../../oportunidades/indice.js'
+import {calcularCotizacion,validarCotizacion,TRANSICIONES_COTIZACION} from '../dominio/cotizaciones.js'
+import {configuracionCotizaciones, evaluarModoCotizaciones} from '../esquemas/contratoCotizacionesSupabase.js'
+import {crearAdaptadorCotizacionesSupabase} from '../adaptadores/adaptadorCotizacionesSupabase.js'
 const CLAVE='crm-aviacion:cotizaciones-demostracion:v1'
 const copia=valor=>structuredClone(valor)
 const inicial=()=>({version:1,secuencia:0,cotizaciones:[]})
 const BLOQUEO_PERSISTENCIA='La persistencia de cotizaciones sigue bloqueada hasta verificar el contrato PostgreSQL, las relaciones y los permisos RLS en staging.'
-export function crearCotizacionesDemostracionService({storage=null,ahora=()=>new Date().toISOString(),id=()=>crypto.randomUUID(),oportunidadesService=crearOportunidadesService({storage})}={}) {
+export function crearServicioCotizacionesDemostracion({storage=null,ahora=()=>new Date().toISOString(),id=()=>crypto.randomUUID(),oportunidadesService=crearServicioOportunidadesDemostracion({storage})}={}) {
   let memoria=inicial(),guardando=false
   function leer(){
     if(!storage)return copia(memoria)
@@ -80,7 +79,7 @@ export function crearCotizacionesNavegador({
   obtenerCliente,
   env = import.meta.env || {},
   config = configuracionCotizaciones,
-  configOportunidades = configuracionOportunidades,
+  configOportunidades,
 } = {}) {
   const evaluacion = evaluarModoCotizaciones(env, config)
   if (!evaluacion.habilitado) return servicioCotizacionesBloqueado(evaluacion.motivo)

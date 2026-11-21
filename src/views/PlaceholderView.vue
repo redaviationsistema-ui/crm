@@ -8,7 +8,7 @@ defineProps({
   },
   descripcion: {
     type: String,
-    default: 'La estructura visual quedó reservada para futuras conexiones y permisos.',
+    default: 'Esta sección está en preparación.',
   },
 })
 </script>

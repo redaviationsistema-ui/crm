@@ -59,16 +59,10 @@ function mensajePorEstado(estado) {
 
 function normalizarErrorAuth(error) {
   const mensaje = error?.message?.trim()
-
-  if (!mensaje) {
-    return 'Ocurrió un error al iniciar sesión.'
-  }
-
-  if (mensaje.toLowerCase() === 'invalid login credentials') {
-    return 'Correo o contraseña incorrectos.'
-  }
-
-  return mensaje
+  const normalizado = new Error(mensaje || 'Ocurrió un error al iniciar sesión.')
+  if (error?.code) normalizado.code = error.code
+  if (Number.isInteger(error?.status)) normalizado.status = error.status
+  return normalizado
 }
 
 export async function validarAccesoCrm() {
@@ -119,7 +113,7 @@ export async function iniciarSesionConPassword(email, password) {
   })
 
   if (error) {
-    throw new Error(normalizarErrorAuth(error))
+    throw normalizarErrorAuth(error)
   }
 
   const {

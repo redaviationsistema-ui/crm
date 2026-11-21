@@ -1,8 +1,12 @@
 <script setup>
+import { vDialogoModal } from '../compartido/directivas/dialogoModal.js'
+
 import { reactive, watch } from 'vue'
-import { formatearFecha } from '@/lib/crm'
+import { construirFechaProgramada, formatearFecha } from '@/lib/crm'
 
 const props = defineProps({
+  guardando: Boolean,
+  error: { type: String, default: '' },
   abierto: {
     type: Boolean,
     default: false,
@@ -32,18 +36,32 @@ watch(
     }
 
     const fecha = new Date(llamada.fechaProgramada)
-    formulario.fecha = fecha.toISOString().slice(0, 10)
+    formulario.fecha = [fecha.getFullYear(), fecha.getMonth() + 1, fecha.getDate()]
+      .map(valor => String(valor).padStart(2, '0')).join('-')
     formulario.hora = fecha.toTimeString().slice(0, 5)
     formulario.motivo = ''
   },
   { immediate: true },
 )
+
+function confirmar() {
+  if (props.guardando || !formulario.fecha || !formulario.hora) return
+  emit('confirmar', { fechaProgramada: construirFechaProgramada(formulario.fecha, formulario.hora) })
+}
 </script>
 
 <template>
-  <div v-if="abierto" class="modal-overlay" @click.self="$emit('cancelar')">
+  <dialog
+    v-if="abierto"
+    v-dialogo-modal
+    class="dialogo-llamada"
+    aria-labelledby="titulo-reprogramar-llamada"
+    @cancel.prevent="!guardando && $emit('cancelar')"
+    @click.self="!guardando && $emit('cancelar')"
+  >
     <section class="modal">
-      <strong>Reprogramar llamada</strong>
+      <strong id="titulo-reprogramar-llamada">Reprogramar llamada</strong>
+      <p v-if="error" role="alert">{{ error }}</p>
       <p>Fecha actual: {{ formatearFecha(llamada?.fechaProgramada, { incluirHora: true }) }}</p>
 
       <label>
@@ -62,38 +80,36 @@ watch(
       </label>
 
       <div class="modal-acciones">
-        <button @click="$emit('cancelar')">Cancelar</button>
+        <button :disabled="guardando" @click="$emit('cancelar')">Cancelar</button>
         <button
           class="primario"
-          @click="
-            $emit('confirmar', {
-              fechaProgramada: formulario.fecha && formulario.hora ? `${formulario.fecha}T${formulario.hora}:00` : '',
-              motivo: formulario.motivo,
-            })
-          "
+          :disabled="guardando || !formulario.fecha || !formulario.hora"
+          @click="confirmar"
         >
           Reprogramar
         </button>
       </div>
     </section>
-  </div>
+  </dialog>
 </template>
 
 <style scoped>
-.modal-overlay {
-  position: fixed;
-  inset: 0;
+.dialogo-llamada {
+  width: min(calc(100% - 2rem), 440px);
+  max-height: calc(100% - 2rem);
+  margin: auto;
+  padding: 0;
+  border: 1px solid var(--color-borde);
+  border-radius: var(--radio-panel);
+  overflow: auto;
+}
+
+.dialogo-llamada::backdrop {
   background: rgba(7, 23, 47, 0.36);
-  z-index: 55;
-  display: grid;
-  place-items: center;
-  padding: 1rem;
 }
 
 .modal {
-  width: min(100%, 440px);
-  padding: 1.3rem;
-  border-radius: 22px;
+  padding: var(--espacio-pagina);
   background: #fff;
   display: grid;
   gap: 0.8rem;
@@ -112,8 +128,8 @@ span, p {
 input, textarea {
   border: 1px solid #dbe5f4;
   border-radius: 14px;
-  min-height: 3rem;
-  padding: 0.8rem 0.95rem;
+  min-height: var(--altura-control);
+  padding: 5px 9px;
   font: inherit;
 }
 
@@ -126,7 +142,7 @@ textarea { min-height: 5rem; resize: vertical; }
 
 .modal-acciones button {
   flex: 1;
-  min-height: 3rem;
+  min-height: var(--altura-control);
   border: 0;
   border-radius: 14px;
   font-weight: 700;

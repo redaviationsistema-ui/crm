@@ -1,4 +1,6 @@
 <script setup>
+import { cerrarMenuConEscape } from '../compartido/utilidades/cerrarMenuConEscape.js'
+
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { generarPasswordSegura, validarPasswordAdministrativa } from '@/domain/passwordUsuario'
 import { ROLES_USUARIO_ADMIN } from '@/domain/usuariosAdmin'
@@ -473,14 +475,18 @@ function fechaCorta(fecha) {
     </section>
   </section>
   <section v-else class="usuarios-admin" aria-labelledby="titulo-usuarios">
-    <div class="aviso-conexion" role="note"><strong>Administración real de Supabase</strong><p>Las operaciones requieren una Edge Function autorizada y se registran en PostgreSQL.</p></div>
 
     <header class="encabezado">
-      <div><h1 id="titulo-usuarios">Administración de usuarios</h1><p>{{ usuarioFiltrado.length }} de {{ usuarios.length }} usuarios</p></div>
+      <div><h1 id="titulo-usuarios">Administración de usuarios</h1><p>{{ usuarioFiltrado.length }} de {{ usuarios.length }} usuarios · Administración real de Supabase</p></div>
       <div class="acciones-encabezado">
-        <button v-if="puedeDiagnosticar" type="button" :disabled="diagnosticando" :aria-busy="diagnosticando" @click="diagnosticarConexion">Diagnosticar conexión</button>
-        <button type="button" :disabled="guardando||cargando||!autorizado" @click="consultarAuditoria">Historial de acciones</button>
-        <button type="button" @click="mostrarAccion('recargar')" :disabled="cargando||guardando">Recargar</button>
+        <details class="herramientas-usuarios" @keydown.esc="cerrarMenuConEscape">
+          <summary>Herramientas</summary>
+          <div class="opciones-usuarios">
+            <button v-if="puedeDiagnosticar" type="button" :disabled="diagnosticando" :aria-busy="diagnosticando" @click="diagnosticarConexion">Diagnosticar conexión</button>
+            <button type="button" :disabled="guardando||cargando||!autorizado" @click="consultarAuditoria">Historial de acciones</button>
+            <button type="button" @click="mostrarAccion('recargar')" :disabled="cargando||guardando">Recargar</button>
+          </div>
+        </details>
         <button type="button" class="principal" :disabled="!autorizado || guardando" @click="nuevoUsuario">+ Nuevo usuario</button>
       </div>
     </header>
@@ -495,7 +501,7 @@ function fechaCorta(fecha) {
       <label>Estado<select v-model="filtroEstado"><option value="">Todos</option><option value="activo">Activos</option><option value="inactivo">Inactivos</option></select></label>
     </div>
 
-    <div class="tabla"><table>
+    <div class="tabla" tabindex="0" role="region" aria-label="Tabla de usuarios"><table>
       <thead><tr><th>Usuario</th><th>Correo / teléfono</th><th>Rol</th><th>Estado</th><th>Creado</th><th>Acciones</th></tr></thead>
       <tbody>
         <tr v-for="usuario in usuarioFiltrado" :key="usuario.id">
@@ -522,7 +528,7 @@ function fechaCorta(fecha) {
 <style scoped>
 .modo-alta{clear:both;display:grid;gap:6px;margin-bottom:12px;font-size:12px;color:#61748d}.modo-alta select{height:42px;border:1px solid #dce3ec;border-radius:7px}
 
-.accion-usuario{max-width:1120px;margin:auto}.tarjeta-accion,.tarjeta-resultado{padding:28px;background:white;border:1px solid #e2e8f0;border-radius:16px}.tarjeta-accion{max-width:760px;line-height:1.7}.tarjeta-accion label{max-width:460px}.tarjeta-accion h2{margin-top:0}.tarjeta-accion pre{white-space:pre-wrap;overflow-wrap:anywhere}.accion-usuario .historial{border:0;padding:0}
+.accion-usuario{max-width:1120px;margin:auto}.tarjeta-accion,.tarjeta-resultado{padding:var(--espacio-pagina);background:white;border:1px solid #e2e8f0;border-radius:16px}.tarjeta-accion{max-width:760px;line-height:1.7}.tarjeta-accion label{max-width:460px}.tarjeta-accion h2{margin-top:0}.tarjeta-accion pre{white-space:pre-wrap;overflow-wrap:anywhere}.accion-usuario .historial{border:0;padding:0}
 
 .volver-registro{display:inline-flex;align-items:center;gap:10px;border:0;background:transparent;padding:8px 0;color:#64748b;font-size:14px}.volver-registro span{font-size:20px}.registro-encabezado{margin:30px 0}.registro-etiqueta{font-size:11px;font-weight:700;letter-spacing:.13em;color:#74869c}.registro-encabezado h1{margin:12px 0 10px;font-size:clamp(26px,3vw,36px);letter-spacing:-.035em;line-height:1.2}.registro-encabezado>p{margin:0;color:#64748b;line-height:1.6}
 .registro-usuario{width:100%;max-width:1100px;margin:0 auto;padding:0 0 20px;color:#17304e}
@@ -536,15 +542,41 @@ function fechaCorta(fecha) {
 .numero-seccion{display:grid;place-items:center;width:24px;height:24px;border-radius:7px;background:#f1f5fa;color:#758aa3;flex-shrink:0}.numero-seccion svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
 .descripcion-seccion{clear:both;margin:0 0 8px;color:#8591a1;font-size:11px;line-height:1.5}.registro-campos{clear:both;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px 22px}
 .registro-campos label{display:block;font-size:12px;font-weight:500;color:#43566f;min-width:0}.registro-campos label>span:not(.password-integrada){color:#8c99aa}.registro-campos .opcional{float:right;font-size:10px;font-weight:400}
-.registro-campos input,.registro-campos select{display:block;width:100%;min-width:0;box-sizing:border-box;margin-top:6px;height:43px;min-height:43px;padding:10px 12px;border:1px solid #dce3ec;border-radius:7px;background:#fff;color:#203b5b;font-size:13px;line-height:1.4;transition:border-color .15s,box-shadow .15s}.registro-campos input::placeholder{color:#a6b0bd}.registro-campos input:focus,.registro-campos select:focus{outline:none;border-color:#7896b8;box-shadow:0 0 0 3px #ecf2f9}.registro-campos input:disabled,.registro-campos select:disabled{background:#f5f7fa;color:#9aa6b4}
+.registro-campos input,.registro-campos select{display:block;width:100%;min-width:0;box-sizing:border-box;margin-top:6px;height:var(--altura-control);min-height:var(--altura-control);padding:10px 12px;border:1px solid #dce3ec;border-radius:7px;background:#fff;color:#203b5b;font-size:13px;line-height:1.4;transition:border-color .15s,box-shadow .15s}.registro-campos input::placeholder{color:#a6b0bd}.registro-campos input:focus,.registro-campos select:focus{outline:none;border-color:#7896b8;box-shadow:0 0 0 3px #ecf2f9}.registro-campos input:disabled,.registro-campos select:disabled{background:#f5f7fa;color:#9aa6b4}
 .detalle-rol{clear:both;margin:8px 0 0;color:#8591a1;font-size:11px;line-height:1.5}
 .seguridad-resumen{clear:both;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:12px}.estado-password{margin:0;font-size:11px;color:#8591a1}.solicitar-password{display:flex;align-items:center;gap:8px;font-size:12px;color:#61748d}.solicitar-password input{width:14px;height:14px;min-height:0;margin:0;accent-color:#173f70}
-.password-integrada{display:flex;align-items:center;position:relative;gap:0;min-width:0;margin-top:6px;border:1px solid #dce3ec;border-radius:7px;background:#fff;overflow:hidden}.password-integrada:focus-within{border-color:#7896b8;box-shadow:0 0 0 3px #ecf2f9}.registro-campos .password-integrada input{flex:1;width:0;margin:0;border:0;border-radius:0;box-shadow:none;height:41px;min-height:41px}.password-integrada .icono-password{display:grid;place-items:center;flex:0 0 32px;width:32px;height:32px;padding:7px;border:0;background:transparent;color:#7c8da3;border-radius:5px;margin-right:3px}.icono-password svg,.controles-password svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}.password-integrada .icono-password:hover:not(:disabled){background:#f0f4f9;color:#173f70}.icono-password:focus-visible{outline:2px solid #7896b8;outline-offset:-2px}
+.password-integrada{display:flex;align-items:center;position:relative;gap:0;min-width:0;margin-top:6px;border:1px solid #dce3ec;border-radius:7px;background:#fff;overflow:hidden}.password-integrada:focus-within{border-color:#7896b8;box-shadow:0 0 0 3px #ecf2f9}.registro-campos .password-integrada input{flex:1;width:0;margin:0;border:0;border-radius:0;box-shadow:none;height:var(--altura-control);min-height:var(--altura-control)}.password-integrada .icono-password{display:grid;place-items:center;flex:0 0 32px;width:32px;height:32px;padding:7px;border:0;background:transparent;color:#7c8da3;border-radius:5px;margin-right:3px}.icono-password svg,.controles-password svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}.password-integrada .icono-password:hover:not(:disabled){background:#f0f4f9;color:#173f70}.icono-password:focus-visible{outline:2px solid #7896b8;outline-offset:-2px}
 .controles-password{display:flex;align-items:center;flex-wrap:wrap;gap:10px;margin-top:10px;font-size:11px;color:#52725e}.controles-password button{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border:1px solid #dce4ee;border-radius:6px;background:#f8fafd;color:#476181;font-size:11px;min-height:31px}.requisitos-password{color:#8a96a5;font-size:10px}.privacidad-password{font-size:10px;line-height:1.5;color:#99a4b2;margin:7px 0 0}
 .confirmar-password{padding:10px 12px;margin:12px 0 0;border:1px solid #eee0be;border-radius:7px;background:#fffaf1;font-size:11px;line-height:1.5;color:#80704a}.confirmar-password p{margin:4px 0 8px}.confirmar-password .solicitar-password{font-size:11px}
-.registro-pie{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:12px 22px;border-top:1px solid #edf1f5;background:#fafbfd}.registro-pie>span{font-size:10px;color:#97a2b1}.registro-pie>div{display:flex;gap:9px}.registro-pie button{font-size:12px;min-height:39px;padding:9px 18px;border-radius:7px;border:1px solid #dce3ec}.registro-pie .crear-invitacion{background:#173f70;border-color:#173f70;color:#fff;min-width:120px}.registro-pie .crear-invitacion:hover:not(:disabled){background:#12355f}
+.registro-pie{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:12px 22px;border-top:1px solid #edf1f5;background:#fafbfd}.registro-pie>span{font-size:10px;color:#97a2b1}.registro-pie>div{display:flex;gap:9px}.registro-pie button{font-size:12px;min-height:var(--altura-control);padding:9px 18px;border-radius:7px;border:1px solid #dce3ec}.registro-pie .crear-invitacion{background:#173f70;border-color:#173f70;color:#fff;min-width:120px}.registro-pie .crear-invitacion:hover:not(:disabled){background:#12355f}
 .registro-error{margin:14px 24px 0;padding:9px 12px;background:#fff6f6;border:1px solid #f0d8d8;border-radius:7px;color:#9a3b3b;font-size:12px;line-height:1.5}
 @media(max-width:600px){.registro-usuario .formulario-encabezado{gap:10px}.formulario-encabezado h1{font-size:22px}.formulario-encabezado p{font-size:12px}.registro-tarjeta fieldset{padding:15px 16px}.registro-campos{grid-template-columns:1fr;gap:12px}.registro-pie{padding:12px 16px;flex-wrap:wrap}.registro-pie>div{margin-left:auto}.registro-pie>span{width:100%}.registro-error{margin:12px 16px 0}.requisitos-password{flex-basis:100%}.seguridad-resumen{align-items:flex-start;flex-direction:column}}
 
-.usuarios-admin{display:grid;gap:1rem;color:#17304e}.aviso-conexion{padding:.9rem 1rem;border:1px solid #d6b75d;background:#fff8df;border-radius:8px}.aviso-conexion p{margin:.35rem 0 0}.encabezado{display:flex;align-items:center;gap:1rem;flex-wrap:wrap}.encabezado>div:first-child{margin-right:auto}.encabezado h1,.encabezado p,.formulario h2,.confirmacion h2,.historial h2{margin:.2rem 0}.acciones-encabezado,.acciones-formulario{display:flex;gap:.5rem;flex-wrap:wrap}button{padding:.6rem .8rem;border:1px solid #b9c9dc;border-radius:6px;background:#fff;color:#17304e;cursor:pointer}button:disabled{opacity:.55;cursor:not-allowed}.principal{background:#173f70;color:#fff;border-color:#173f70}.peligro{color:#9e2f2f}.formulario,.confirmacion,.historial{padding:1rem 0;border-top:1px solid #cbd6e2;border-bottom:1px solid #cbd6e2}.campos,.filtros{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:.8rem;margin:1rem 0}label{display:grid;gap:.35rem;font-size:.92rem}input,select{width:100%;min-width:0;box-sizing:border-box;padding:.6rem;border:1px solid #b7c6d8;border-radius:5px;background:#fff;color:#17304e}.acciones-formulario{justify-content:flex-end;margin-top:1rem}.ayuda,small{display:block;color:#63758a}.tabla{overflow:auto;background:#fff}table{width:100%;border-collapse:collapse;min-width:780px}th,td{text-align:left;padding:.7rem;border-bottom:1px solid #dce3eb;vertical-align:top}th{font-size:.85rem;color:#4f6277;background:#f4f7fa}td small{margin-top:.25rem;overflow-wrap:anywhere}.acciones-fila{white-space:nowrap}.acciones-fila button{margin:0 .2rem .2rem 0}.estado{display:inline-block;padding:.2rem .45rem;border-radius:4px;font-size:.85rem}.estado.activo{color:#17643e;background:#e6f4eb}.estado.inactivo{color:#7b4b10;background:#fbf0dc}.vacio{text-align:center;color:#63758a}.error{color:#9e2f2f}.mensaje{color:#17643e}.confirmacion{border-color:#b95050}.confirmacion label{max-width:420px}@media(max-width:600px){.acciones-encabezado{width:100%}.acciones-encabezado button{flex:1}.filtros{grid-template-columns:1fr}}
+.usuarios-admin{display:grid;gap:var(--espacio-panel);color:var(--color-tinta)}.aviso-conexion{padding:.9rem 1rem;border:1px solid #d6b75d;background:#fff8df;border-radius:8px}.aviso-conexion p{margin:.35rem 0 0}.encabezado{display:flex;align-items:center;gap:1rem;flex-wrap:wrap}.encabezado>div:first-child{margin-right:auto}.encabezado h1,.encabezado p,.formulario h2,.confirmacion h2,.historial h2{margin:.2rem 0}.acciones-encabezado,.acciones-formulario{display:flex;gap:.5rem;flex-wrap:wrap}button{min-height:var(--altura-control);padding:4px 9px;border:1px solid #b9c9dc;border-radius:6px;background:#fff;color:#17304e;cursor:pointer}button:disabled{opacity:.55;cursor:not-allowed}.principal{background:#173f70;color:#fff;border-color:#173f70}.peligro{color:#9e2f2f}.formulario,.confirmacion,.historial{padding:1rem 0;border-top:1px solid #cbd6e2;border-bottom:1px solid #cbd6e2}.campos,.filtros{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:.8rem;margin:0}label{display:grid;gap:.35rem;font-size:.92rem}input,select{width:100%;min-width:0;box-sizing:border-box;min-height:var(--altura-control);padding:4px 8px;border:1px solid #b7c6d8;border-radius:5px;background:#fff;color:#17304e}.acciones-formulario{justify-content:flex-end;margin-top:1rem}.ayuda,small{display:block;color:#63758a}.tabla{overflow:auto;background:#fff}table{width:100%;border-collapse:collapse;min-width:780px}th,td{text-align:left;height:var(--altura-fila);padding:5px 8px;border-bottom:1px solid #dce3eb;vertical-align:top}th{font-size:.85rem;color:#4f6277;background:#f4f7fa}td small{margin-top:.25rem;overflow-wrap:anywhere}.acciones-fila{white-space:nowrap}.acciones-fila button{margin:0 .2rem .2rem 0}.estado{display:inline-block;padding:.2rem .45rem;border-radius:4px;font-size:.85rem}.estado.activo{color:#17643e;background:#e6f4eb}.estado.inactivo{color:#7b4b10;background:#fbf0dc}.vacio{text-align:center;color:#63758a}.error{color:#9e2f2f}.mensaje{color:#17643e}.confirmacion{border-color:#b95050}.confirmacion label{max-width:420px}@media(max-width:600px){.acciones-encabezado{width:100%}.acciones-encabezado button{flex:1}.filtros{grid-template-columns:1fr}}
+
+.herramientas-usuarios { position: relative; }
+.herramientas-usuarios summary {
+  display: list-item;
+  min-height: var(--altura-control);
+  padding: 7px 10px;
+  border: 1px solid var(--color-borde);
+  border-radius: var(--radio-control);
+  background: var(--color-superficie);
+  cursor: pointer;
+}
+.opciones-usuarios {
+  position: absolute;
+  inset: calc(100% + 4px) auto auto 0;
+  z-index: 2;
+  display: grid;
+  gap: 4px;
+  width: max-content;
+  max-width: 72vw;
+  padding: 6px;
+  background: var(--color-superficie);
+  border: 1px solid var(--color-borde);
+  border-radius: var(--radio-panel);
+  box-shadow: var(--sombra-panel);
+}
+.opciones-usuarios button { text-align: left; }
 </style>

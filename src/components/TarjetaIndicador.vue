@@ -23,18 +23,18 @@ defineProps({
   <article class="tarjeta-indicador" :class="`tono-${tono}`">
     <p>{{ titulo }}</p>
     <strong>{{ valor }}</strong>
-    <span>{{ ayuda }}</span>
+    <span v-if="ayuda">{{ ayuda }}</span>
   </article>
 </template>
 
 <style scoped>
 .tarjeta-indicador {
-  min-height: 118px;
-  padding: 1rem 1.05rem;
-  border-radius: 16px;
+  min-height: 76px;
+  padding: var(--espacio-panel);
+  border-radius: var(--radio-panel);
   background: #fff;
   border: 1px solid #e4eaf2;
-  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.05);
+  box-shadow: var(--sombra-panel);
   display: grid;
   align-content: space-between;
   gap: 0.25rem;
@@ -50,18 +50,18 @@ defineProps({
 }
 
 .tarjeta-indicador strong {
-  font-size: 2.1rem;
+  font-size: 1.55rem;
   color: #07172f;
   line-height: 1;
 }
 
 .tarjeta-indicador span {
-  color: #7b869c;
+  color: var(--color-secundario);
   font-size: 0.8rem;
 }
 
 .tono-primario {
-  background: linear-gradient(135deg, #0e5fd7, #2f87ff);
+  background: var(--color-accion);
   border-color: transparent;
 }
 
@@ -72,7 +72,7 @@ defineProps({
 }
 
 .tono-alerta {
-  background: linear-gradient(135deg, #fff5f5, #ffffff);
+  background: var(--color-fondo-alerta);
   border-color: #f3d0d6;
 }
 </style>

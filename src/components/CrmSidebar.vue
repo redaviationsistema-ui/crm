@@ -28,6 +28,28 @@ const nombreUsuario = computed(
 )
 const avatar = computed(() => obtenerIniciales(nombreUsuario.value))
 
+const areas = {
+  contactos: 'Comercial',
+  oportunidades: 'Comercial',
+  cotizaciones: 'Comercial',
+  llamadas: 'Actividad',
+  seguimientos: 'Actividad',
+  historial: 'Actividad',
+  equipo: 'Gestión',
+  reportes: 'Gestión',
+  usuarios: 'Gestión',
+  configuracion: 'Gestión',
+}
+const gruposMenu = computed(() => {
+  const grupos = new Map()
+  for (const item of props.items) {
+    const area = areas[item.id] || ''
+    if (!grupos.has(area)) grupos.set(area, [])
+    grupos.get(area).push(item)
+  }
+  return grupos
+})
+
 function seleccionarVista(id) {
   emit('cambiar-vista', id)
   emit('cerrar')
@@ -37,21 +59,25 @@ function seleccionarVista(id) {
 <template>
   <aside class="crm-sidebar" :class="{ abierto }">
     <div class="marca">
-      <strong>Centro comercial</strong>
-      <small>Llamadas y seguimiento</small>
+      <strong>Sky Group LLC</strong>
+      <small>CRM Aviación</small>
     </div>
 
-    <nav class="menu">
-      <button
-        v-for="item in items"
-        :key="item.id"
-        class="menu-item"
-        :class="{ activo: vistaActiva === item.id }"
-        @click="seleccionarVista(item.id)"
-      >
-        <span>{{ item.icono }}</span>
-        {{ item.label }}
-      </button>
+    <nav class="menu" aria-label="Módulos del CRM">
+      <div v-for="[area, opciones] in gruposMenu" :key="area" class="grupo-menu">
+        <small v-if="area">{{ area }}</small>
+        <button
+          v-for="item in opciones"
+          :key="item.id"
+          class="menu-item"
+          :class="{ activo: vistaActiva === item.id }"
+          :aria-current="vistaActiva === item.id ? 'page' : undefined"
+          @click="seleccionarVista(item.id)"
+        >
+          <span aria-hidden="true">{{ item.icono }}</span>
+          {{ item.label }}
+        </button>
+      </div>
     </nav>
 
     <div class="perfil">
@@ -68,19 +94,19 @@ function seleccionarVista(id) {
 
 <style scoped>
 .crm-sidebar {
-  background: #07172f;
+  background: var(--color-marino);
   color: #f5f8ff;
-  padding: 1.5rem 1.1rem;
+  padding: 12px;
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
+  gap: 14px;
   min-height: 100%;
 }
 
 .marca {
   padding: 0.8rem;
   border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 20px;
+  border-radius: var(--radio-panel);
   background: rgba(255, 255, 255, 0.03);
 }
 
@@ -98,16 +124,26 @@ function seleccionarVista(id) {
 
 .menu {
   display: grid;
-  gap: 0.4rem;
+  gap: 9px;
 }
+
+.grupo-menu { display: grid; gap: 2px; }
+.grupo-menu > small {
+  padding: 2px 9px;
+  color: #a8bbd7;
+  font-size: var(--texto-secundario);
+  font-weight: 600;
+}
+
 
 .menu-item {
   border: 0;
-  border-radius: 16px;
+  border-radius: var(--radio-control);
   background: transparent;
   color: inherit;
   text-align: left;
-  padding: 0.95rem 1rem;
+  padding: 6px 9px;
+  min-height: var(--altura-control);
   font-size: 0.95rem;
   display: flex;
   align-items: center;
@@ -124,7 +160,7 @@ function seleccionarVista(id) {
 .perfil {
   margin-top: auto;
   padding: 1rem;
-  border-radius: 20px;
+  border-radius: var(--radio-panel);
   background: rgba(255, 255, 255, 0.04);
   display: grid;
   grid-template-columns: auto 1fr;
@@ -136,7 +172,7 @@ function seleccionarVista(id) {
   width: 2.8rem;
   height: 2.8rem;
   border-radius: 50%;
-  background: linear-gradient(135deg, #3a88ff, #7cb4ff);
+  background: var(--color-accion);
   color: #fff;
   display: grid;
   place-items: center;
@@ -166,6 +202,8 @@ function seleccionarVista(id) {
 
 @media (max-width: 767px) {
   .crm-sidebar {
+    visibility: hidden;
+    overflow-y: auto;
     position: fixed;
     inset: 0 auto 0 0;
     width: min(86vw, 320px);
@@ -175,6 +213,7 @@ function seleccionarVista(id) {
   }
 
   .crm-sidebar.abierto {
+    visibility: visible;
     transform: translateX(0);
   }
 }

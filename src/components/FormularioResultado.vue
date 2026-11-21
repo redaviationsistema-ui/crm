@@ -1,8 +1,10 @@
 <script setup>
 import { computed, reactive, ref, watch } from 'vue'
+import { duracionLlamadaValida, esEjecutivoActivo } from '../lib/crm'
 import SelectorUsuario from './SelectorUsuario.vue'
 
 const props = defineProps({
+  finalizacionBloqueada: Boolean,
   llamada: {
     type: Object,
     default: null,
@@ -36,6 +38,7 @@ const formulario = reactive({
   motivoId: '',
   motivoPersonalizado: '',
 })
+const responsablesElegibles = computed(() => props.usuarios.filter(esEjecutivoActivo))
 const errorLocal = ref('')
 
 const resultadosFiltrados = computed(() =>
@@ -49,7 +52,7 @@ watch(
   (llamada) => {
     errorLocal.value = ''
     formulario.resultadoId = llamada?.resultadoId || ''
-    formulario.duracion = llamada?.duracionSegundos
+    formulario.duracion = llamada?.duracionSegundos != null
       ? Math.round(Number(llamada.duracionSegundos) / 60)
       : ''
     formulario.notas = llamada?.notasResultado || llamada?.notas || ''
@@ -69,7 +72,7 @@ function construirPayload() {
     llamadaId: props.llamada?.id || null,
     contesto: formulario.contesto === 'si',
     resultadoId: formulario.resultadoId || null,
-    duracion: Number(formulario.duracion) || null,
+    duracion: formulario.duracion === '' ? null : Number(formulario.duracion),
     notas: formulario.notas,
     requiereOtraLlamada: formulario.requiereOtraLlamada === 'si',
     fechaProxima: formulario.fechaProxima,
@@ -95,8 +98,8 @@ function validarSeguimiento() {
     return 'Selecciona la fecha y hora de la llamada.'
   }
 
-  if (!(formulario.asignadoAId || props.llamada?.asignadoAId)) {
-    return 'Selecciona un responsable.'
+  if (!responsablesElegibles.value.some(usuario => usuario.id === formulario.asignadoAId)) {
+    return 'Selecciona un ejecutivo activo.'
   }
 
   return ''
@@ -114,15 +117,21 @@ function guardarSeguimiento() {
   emit('crear-seguimiento', construirPayload())
 }
 
-function guardarResultado() {
+function guardarResultado(evento = 'guardar-resultado') {
+  if (props.finalizacionBloqueada) return
+  const payload = construirPayload()
+  if (!duracionLlamadaValida(payload.duracion)) {
+    errorLocal.value = 'Indica una duración en minutos enteros no negativos.'
+    return
+  }
   errorLocal.value = ''
-  emit('guardar-resultado', construirPayload())
+  emit(evento, payload)
 }
 </script>
 
 <template>
-  <form class="formulario-resultado" @submit.prevent="guardarResultado">
-    <p v-if="errorLocal || error" class="feedback error">{{ errorLocal || error }}</p>
+  <form class="formulario-resultado" @submit.prevent="guardarResultado()">
+    <p v-if="errorLocal || error" class="feedback error" role="alert">{{ errorLocal || error }}</p>
 
     <div class="campo-grupo">
       <span>¿Contestó?</span>
@@ -145,7 +154,8 @@ function guardarResultado() {
     <div class="form-grid">
       <label>
         <span>Duración</span>
-        <input v-model="formulario.duracion" type="number" min="0" placeholder="Minutos" />
+        <input v-model="formulario.duracion" type="number" min="0" step="1" placeholder="Minutos" aria-describedby="alcance-duracion-llamada" />
+        <small id="alcance-duracion-llamada">La duración indicada es de referencia. El servicio de finalización no guarda cambios manuales de duración.</small>
       </label>
 
       <label>
@@ -179,7 +189,7 @@ function guardarResultado() {
           <input v-model="formulario.horaProxima" type="time" />
         </label>
 
-        <SelectorUsuario v-model="formulario.asignadoAId" :usuarios="usuarios" />
+        <SelectorUsuario v-model="formulario.asignadoAId" :usuarios="responsablesElegibles" etiqueta="Asignado a" />
 
         <label>
           <span>Prioridad</span>
@@ -206,7 +216,7 @@ function guardarResultado() {
       <button type="button" class="secundario" @click="guardarSeguimiento">
         Guardar seguimiento
       </button>
-      <button type="button" class="ghost" @click="emit('finalizar', construirPayload())">Finalizar</button>
+      <button type="button" class="ghost" :disabled="finalizacionBloqueada" @click="guardarResultado('finalizar')">Finalizar</button>
     </div>
   </form>
 </template>

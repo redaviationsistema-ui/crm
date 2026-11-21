@@ -13,11 +13,12 @@ import FormularioLlamada from '@/components/FormularioLlamada.vue'
 import SkeletonCarga from '@/components/SkeletonCarga.vue'
 import { cerrarSesion, useAuthSession } from '@/composables/useAuthSession'
 import { useCrm } from '@/composables/useCrm'
+import { esEjecutivoActivo } from '@/lib/crm'
 import { obtenerMenuPorRol, ROLE_LABELS } from '@/lib/crmNavigation'
 import { supabase } from '@/lib/supabase'
 import { evaluarEscriturasPasswordAdmin } from '@/config/usuariosAdminPasswordWrites'
-import CotizacionesView from '@/views/CotizacionesView.vue'
-import OportunidadesView from '@/views/OportunidadesView.vue'
+import ListaCotizaciones from '@/modulos/cotizaciones/vistas/ListaCotizaciones.vue'
+import ListaOportunidades from '@/modulos/oportunidades/vistas/ListaOportunidades.vue'
 import DashboardView from '@/views/DashboardView.vue'
 import HistorialView from '@/views/HistorialView.vue'
 import LlamadasView from '@/views/LlamadasView.vue'
@@ -45,6 +46,7 @@ const router = useRouter()
 const esMovil = ref(false)
 
 const vistaActual = computed(() => route.meta.section || 'panel')
+const esVistaContactos = computed(() => vistaActual.value === 'contactos')
 const vistaAutonoma = computed(() => ['oportunidades','cotizaciones','usuarios'].includes(vistaActual.value))
 const usuarioActualId = computed(() => auth.state.perfil?.id || crm.estado.perfil?.id || '')
 const usuariosVisibles = computed(() =>
@@ -55,6 +57,21 @@ const usuariosAsignables = computed(() =>
 )
 const mostrarDetalleEscritorio = computed(() => Boolean(crm.estado.llamadaSeleccionada))
 const rolActual = computed(() => auth.state.perfil?.rol || crm.estado.perfil?.rol || 'ejecutivo')
+const responsablesLlamadas = computed(() => {
+  if (crm.estado.cargandoResponsables || crm.estado.errorResponsables) return []
+  const perfiles = rolActual.value === 'ejecutivo' ? usuariosVisibles.value : crm.estado.usuarios
+  return perfiles.filter(esEjecutivoActivo)
+})
+
+watch(
+  [crm.formularioAbierto, crm.modalReasignacion, () => crm.estado.llamadaSeleccionada?.id],
+  ([formulario, reasignacion, llamadaId], [formularioAnterior, reasignacionAnterior, llamadaAnterior]) => {
+    if ((formulario && !formularioAnterior && crm.modoFormularioLlamada.value !== 'editar') ||
+      (reasignacion && !reasignacionAnterior) || (llamadaId && llamadaId !== llamadaAnterior)) {
+      void crm.refrescarResponsablesLlamadas()
+    }
+  },
+)
 const menuActual = computed(() => obtenerMenuPorRol(rolActual.value))
 const rutasPorVista = computed(() =>
   Object.fromEntries(menuActual.value.map((item) => [item.id, item.ruta])),
@@ -109,6 +126,7 @@ watch(
   vistaActual,
   (vista) => {
     crm.vistaActiva.value = vista
+    if (vista === 'panel') void crm.cargarLlamadasRecientes()
   },
   { immediate: true },
 )
@@ -126,7 +144,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="crm-shell" :class="{ 'con-detalle': mostrarDetalleEscritorio }">
+  <div class="crm-shell" :class="{ 'con-detalle': mostrarDetalleEscritorio && !vistaAutonoma }">
     <div
       v-if="crm.sidebarAbierto.value"
       class="overlay-mobile"
@@ -146,34 +164,25 @@ onUnmounted(() => {
 
     <main class="crm-main">
       <CrmHeader
-        v-if="!vistaAutonoma"
-        :titulo="crm.tituloVista.value"
-        :subtitulo="crm.descripcionVista.value"
-        :mercado="
-          crm.filtros.value.mercado === 'todos'
-            ? 'Todos los mercados'
-            : crm.filtros.value.mercado
-        "
-        :accion-principal-label="
-          crm.vistaActiva.value === 'contactos' ? '+ Nuevo contacto' : '+ Programar llamada'
-        "
-        :accion-secundaria-label="
-          crm.vistaActiva.value === 'contactos' ? 'Programar llamada' : ''
-        "
+        v-if="!vistaAutonoma || esMovil"
+        :titulo="vistaAutonoma ? 'CRM Aviación' : crm.tituloVista.value"
+        :subtitulo="crm.vistaActiva.value === 'llamadas' ? `${crm.llamadasFiltradas.value.length} registros visibles` : ''"
+        :accion-principal-label="vistaAutonoma ? '' : crm.vistaActiva.value === 'contactos'
+          ? 'Nuevo contacto'
+          : ['panel', 'llamadas'].includes(crm.vistaActiva.value) ? 'Programar llamada' : ''"
         @toggle-sidebar="crm.sidebarAbierto.value = !crm.sidebarAbierto.value"
         @accion-principal="
           crm.vistaActiva.value === 'contactos' ? crm.abrirFormularioContacto() : crm.programarLlamada()
         "
-        @accion-secundaria="crm.programarLlamada"
       />
 
       <div class="contenido">
-        <SkeletonCarga v-if="crm.estado.cargando && !vistaAutonoma" />
+        <SkeletonCarga v-if="!vistaAutonoma && (esVistaContactos ? crm.estado.cargandoContactos : crm.estado.cargando)" />
 
         <EstadoVacio
-          v-else-if="crm.estado.error && !vistaAutonoma"
+          v-else-if="!vistaAutonoma && (esVistaContactos ? crm.estado.errorContactos : crm.estado.error)"
           titulo="No fue posible cargar el CRM"
-          :descripcion="crm.estado.error"
+          :descripcion="esVistaContactos ? crm.estado.errorContactos : crm.estado.error"
         />
 
         <p v-else-if="crm.estado.errorOperacion && !vistaAutonoma" class="feedback-operacion">
@@ -181,15 +190,38 @@ onUnmounted(() => {
         </p>
 
         <p v-if="crm.estado.aviso && !vistaAutonoma" role="status">{{ crm.estado.aviso }}</p>
-        <OportunidadesView v-if="vistaActual === 'oportunidades'" :obtener-cliente-supabase="() => supabase" />
-        <CotizacionesView v-else-if="vistaActual === 'cotizaciones'" :obtener-cliente-supabase="() => supabase" />
+        <div v-if="crm.estado.reprogramacion && !vistaAutonoma">
+          <p role="status">
+            {{ {
+              confirmada: 'La reprogramación se guardó.',
+              observada: 'La llamada muestra la fecha solicitada.',
+              incierta: 'No se pudo confirmar la reprogramación.',
+            }[crm.estado.reprogramacion.estado] }}
+            <span v-if="crm.estado.reprogramacion.errorLectura">No se pudo sincronizar toda la información.</span>
+            <span v-if="crm.estado.reprogramacion.estado === 'incierta' && crm.estado.reprogramacion.fechaObservada">
+              La fecha consultada aún difiere de la solicitada.
+            </span>
+          </p>
+          <button
+            v-if="crm.estado.reprogramacion.estado === 'incierta' || crm.estado.reprogramacion.errorLectura"
+            type="button"
+            class="boton-primario"
+            :disabled="crm.estado.reprogramacion.consultando"
+            @click="crm.consultarReprogramacion"
+          >
+            {{ crm.estado.reprogramacion.consultando ? 'Consultando…' : 'Consultar llamada' }}
+          </button>
+        </div>
+        <ListaOportunidades v-if="vistaActual === 'oportunidades'" :obtener-cliente-supabase="() => supabase" />
+        <ListaCotizaciones v-else-if="vistaActual === 'cotizaciones'" :obtener-cliente-supabase="() => supabase" />
         <UsuariosAdminView v-else-if="vistaActual === 'usuarios'" :actor="auth.state.perfil || crm.estado.perfil" :obtener-cliente-supabase="() => supabase" :password-writes-enabled="passwordWritesMode.habilitado" :password-writes-authenticated="passwordWritesContext.sesionAutenticada" :password-writes-block-reason="passwordWritesMode.motivo" :password-writes-requirements="passwordWritesMode.requisitosPendientes" :registro-nuevo="route.meta.registroUsuario === true" :abrir-registro="() => router.push('/admin/usuarios/nuevo')" :volver-listado="() => router.push('/admin/usuarios')" :vista-accion="route.meta.accionUsuario || 'listado'" :usuario-id="String(route.params.usuarioId || '')" :navegar-accion="(accion, id) => router.push('/admin/usuarios/' + accion + (id ? '/' + encodeURIComponent(id) : ''))" />
         <DashboardView
           v-else-if="!crm.estado.cargando && !crm.estado.error && crm.vistaActiva.value === 'panel'"
           :rol="rolActual"
           :nombre-usuario="auth.state.perfil?.nombre || crm.estado.perfil?.nombre || ''"
           :indicadores="crm.indicadores.value"
-          :llamadas="crm.llamadasFiltradas.value"
+          :llamadas="crm.estado.llamadasRecientes"
+          :error-llamadas="crm.estado.errorLlamadasRecientes || ''"
           :proxima-llamada="proximaLlamada"
           :usuario-actual-id="crm.estado.perfil?.id"
           @abrir-llamada="crm.programarLlamada"
@@ -217,11 +249,13 @@ onUnmounted(() => {
         />
 
         <ProspectosView
-          v-else-if="!crm.estado.error && crm.vistaActiva.value === 'contactos'"
+          v-else-if="!crm.estado.cargandoContactos && !crm.estado.errorContactos && crm.vistaActiva.value === 'contactos'"
           :rol="rolActual"
           :prospectos="crm.estado.prospectos"
           :llamadas="crm.estado.resumenLlamadas"
           :usuarios="crm.estado.usuarios"
+          :cargando-historial="crm.estado.cargandoHistorialContactos"
+          :error-historial="crm.estado.errorHistorialContactos || ''"
           :contacto-destacado="crm.contactoDestacado.value"
           @nuevo-contacto="crm.abrirFormularioContacto"
           @editar-contacto="crm.abrirFormularioContacto"
@@ -244,12 +278,15 @@ onUnmounted(() => {
         <ReportesView
           v-else-if="!crm.estado.error && crm.vistaActiva.value === 'reportes'"
           :reportes="crm.reportes.value"
+          :llamadas="crm.estado.resumenLlamadas"
         />
 
         <PlaceholderView
-          v-else
+          v-else-if="!esVistaContactos"
           :titulo="crm.tituloVista.value"
-          :descripcion="crm.descripcionVista.value"
+          :descripcion="crm.vistaActiva.value === 'equipo'
+            ? 'La vista de productividad por responsable aún está en preparación.'
+            : crm.descripcionVista.value"
         />
       </div>
     </main>
@@ -259,11 +296,14 @@ onUnmounted(() => {
       :llamada="crm.estado.llamadaSeleccionada"
       :abierto="esMovil ? crm.drawerAbierto.value : true"
       :eventos="crm.historialSeleccionado.value"
+      :finalizacion="crm.estado.finalizaciones.get(crm.estado.llamadaSeleccionada?.id)"
+      :guardando="crm.estado.guardando"
+      @reintentar-lectura="crm.reintentarLecturaFinalizacion"
       :resultados="crm.estado.resultados"
-      :usuarios="rolActual === 'ejecutivo' ? usuariosVisibles : usuariosAsignables"
+      :usuarios="responsablesLlamadas"
       :error="crm.estado.errorOperacion || ''"
       :mostrar-vacio="!esMovil"
-      @cerrar="crm.drawerAbierto.value = false"
+      @cerrar="crm.cerrarDetalleLlamada"
       @iniciar="crm.iniciarLlamada"
       @editar="crm.editarLlamada"
       @reprogramar="crm.solicitarReprogramacion"
@@ -281,9 +321,9 @@ onUnmounted(() => {
       :prospecto-inicial-id="crm.prospectoPreseleccionadoId.value"
       :usuario-actual-id="usuarioActualId"
       :prospectos="crm.estado.prospectos"
-      :usuarios="rolActual === 'ejecutivo' ? usuariosVisibles : usuariosAsignables"
+      :usuarios="responsablesLlamadas"
       :motivos="crm.estado.motivos"
-      :error="crm.estado.errorOperacion || ''"
+      :error="crm.estado.errorOperacion || (!crm.llamadaEnEdicion.value && crm.estado.errorResponsables) || ''"
       @cerrar="crm.formularioAbierto.value = false"
       @guardar="crm.crearLlamada"
       @guardar-y-crear-otra="crm.crearLlamada"
@@ -310,6 +350,8 @@ onUnmounted(() => {
     <ModalReprogramarLlamada
       :abierto="crm.modalReprogramacion.value"
       :llamada="crm.llamadaPendienteReprogramacion.value"
+      :guardando="crm.reprogramando.value"
+      :error="crm.estado.errorOperacion || ''"
       @cancelar="crm.modalReprogramacion.value = false"
       @confirmar="crm.confirmarReprogramacion"
     />
@@ -317,9 +359,10 @@ onUnmounted(() => {
     <ModalReasignarLlamada
       :abierto="crm.modalReasignacion.value"
       :llamada="crm.llamadaPendienteReasignacion.value"
-      :usuarios="rolActual === 'ejecutivo' ? usuariosVisibles : usuariosAsignables"
+      :usuarios="responsablesLlamadas"
       @cancelar="crm.modalReasignacion.value = false"
       @confirmar="crm.confirmarReasignacion"
+      :error="crm.estado.errorOperacion || crm.estado.errorResponsables || ''"
     />
 
     <nav class="nav-movil">

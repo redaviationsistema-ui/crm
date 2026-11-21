@@ -15,6 +15,8 @@ const formulario = reactive({
 const estado = reactive({
   cargando: false,
   error: '',
+  errorCode: '',
+  errorStatus: null,
 })
 const mostrarPassword = ref(false)
 
@@ -23,12 +25,16 @@ const mensajeRuta = computed(() => String(route.query.message || ''))
 async function iniciarSesion() {
   estado.cargando = true
   estado.error = ''
+  estado.errorCode = ''
+  estado.errorStatus = null
 
   try {
     await iniciarSesionConPassword(formulario.email, formulario.password)
     router.replace('/')
   } catch (error) {
     estado.error = error?.message || 'Ocurrió un error al iniciar sesión.'
+    estado.errorCode = error?.code || ''
+    estado.errorStatus = Number.isInteger(error?.status) ? error.status : null
   } finally {
     estado.cargando = false
   }
@@ -52,7 +58,13 @@ async function iniciarSesion() {
       </header>
 
       <p v-if="mensajeRuta" class="feedback warning">{{ mensajeRuta }}</p>
-      <p v-else-if="estado.error" class="feedback error">{{ estado.error }}</p>
+      <p v-else-if="estado.error" class="feedback error">
+        <strong v-if="estado.errorStatus || estado.errorCode">
+          {{ estado.errorStatus ? `HTTP ${estado.errorStatus}` : '' }}
+          {{ estado.errorCode ? `(${estado.errorCode})` : '' }}:
+        </strong>
+        {{ estado.error }}
+      </p>
       <p v-else-if="auth.state.checking" class="feedback neutral">Comprobando sesión...</p>
 
       <form class="login-form" @submit.prevent="iniciarSesion">
@@ -99,10 +111,9 @@ async function iniciarSesion() {
 }
 
 .login-hero {
-  padding: 4rem;
+  padding: clamp(20px, 5vw, 52px);
   background:
-    linear-gradient(135deg, rgba(7, 23, 47, 0.98), rgba(17, 103, 232, 0.92)),
-    #07172f;
+    var(--color-marino);
   color: #fff;
   display: grid;
   align-content: center;
@@ -123,7 +134,7 @@ async function iniciarSesion() {
 }
 
 .login-hero h1 {
-  font-size: clamp(2.2rem, 4vw, 4rem);
+  font-size: clamp(1.6rem, 3vw, 2.6rem);
 }
 
 .login-hero p {
@@ -134,7 +145,7 @@ async function iniciarSesion() {
 }
 
 .login-card {
-  padding: 2rem;
+  padding: clamp(16px, 3vw, 28px);
   display: grid;
   align-content: center;
   background: rgba(255, 255, 255, 0.88);
@@ -168,9 +179,9 @@ async function iniciarSesion() {
 }
 
 .login-form input {
-  min-height: 3.25rem;
+  min-height: var(--altura-control);
   border: 1px solid #d8e2f1;
-  border-radius: 16px;
+  border-radius: var(--radio-control);
   padding: 0 1rem;
   background: #fff;
   width: 100%;
@@ -197,9 +208,9 @@ async function iniciarSesion() {
 }
 
 .login-form button {
-  min-height: 3.25rem;
+  min-height: var(--altura-control);
   border: 0;
-  border-radius: 16px;
+  border-radius: var(--radio-control);
   background: #1167e8;
   color: #fff;
   font-weight: 800;

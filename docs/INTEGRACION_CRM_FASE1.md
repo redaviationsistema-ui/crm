@@ -18,7 +18,7 @@ Se quitaron los registros de consola que imprimían payloads de llamadas y segui
 
 ## Bloqueos que se conservan
 
-- No se habilitó el modo real de oportunidades: requiere un proyecto staging independiente, destino coincidente, clave pública no privilegiada y evidencia de todas las pruebas de permisos configuradas en `src/config/oportunidadesBackend.js`.
+- No se habilitó el modo real de oportunidades: requiere un proyecto staging independiente, destino coincidente, clave pública no privilegiada y evidencia de todas las pruebas de permisos configuradas en `src/modulos/oportunidades/esquemas/contratoOportunidadesSupabase.js`.
 - No se activaron escrituras de oportunidades contra producción.
 - Las cotizaciones reales permanecen bloqueadas hasta validar staging; sus propuestas de endurecimiento están separadas en [`sql/cotizaciones-mejoras-propuestas.sql`](./sql/cotizaciones-mejoras-propuestas.sql).
 - No se ejecutó SQL, no se escribieron datos remotos y no se desplegó código.

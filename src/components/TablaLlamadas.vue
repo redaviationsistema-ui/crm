@@ -59,14 +59,14 @@ defineEmits([
         />
       </div>
 
-      <div class="version-desktop">
+      <div class="version-desktop" tabindex="0" role="region" aria-label="Tabla de llamadas">
         <table>
           <thead>
             <tr>
               <th>Prioridad</th>
               <th>Cliente</th>
               <th>Mercado</th>
-              <th>Telefono</th>
+              <th>Teléfono</th>
               <th>Motivo</th>
               <th v-if="rol !== 'ejecutivo'">Creado por</th>
               <th v-if="rol !== 'ejecutivo'">Asignado a</th>
@@ -79,12 +79,12 @@ defineEmits([
             <tr v-for="llamada in llamadas" :key="llamada.id">
               <td><BadgePrioridad :prioridad="llamada.prioridad" /></td>
               <td>
-                <strong>{{ llamada.cliente.nombre }}</strong>
-                <span>{{ llamada.cliente.empresa }}</span>
+                <strong class="texto-celda" :title="llamada.cliente.nombre">{{ llamada.cliente.nombre }}</strong>
+                <span class="texto-celda" :title="llamada.cliente.empresa">{{ llamada.cliente.empresa }}</span>
               </td>
               <td><BadgeMercado :tipo="llamada.cliente.tipoMercado" /></td>
               <td>{{ llamada.cliente.telefono }}</td>
-              <td>{{ llamada.motivo }}</td>
+              <td><span class="texto-celda" :title="llamada.motivo">{{ llamada.motivo }}</span></td>
               <td v-if="rol !== 'ejecutivo'">{{ llamada.creadoPorNombre }}</td>
               <td v-if="rol !== 'ejecutivo'">{{ llamada.asignadoANombre }}</td>
               <td>{{ formatearFecha(llamada.fechaProgramada, { incluirHora: true }) }}</td>
@@ -129,26 +129,28 @@ defineEmits([
 .version-desktop {
   overflow: auto;
   border: 1px solid #dfe7f5;
-  border-radius: 24px;
+  border-radius: var(--radio-panel);
   background: #fff;
 }
 
 table {
   width: 100%;
   border-collapse: collapse;
-  min-width: 1120px;
+  min-width: 850px;
 }
 
 th,
 td {
-  padding: 1rem;
+  height: var(--altura-fila);
+  padding: 4px 8px;
   text-align: left;
   border-bottom: 1px solid #edf2fb;
-  vertical-align: top;
+  vertical-align: middle;
 }
 
 th {
-  color: #5c6d8b;
+  color: var(--color-secundario);
+  background: #f7f9fc;
   font-size: 0.82rem;
   text-transform: uppercase;
   letter-spacing: 0.04em;
@@ -167,6 +169,13 @@ td span {
   color: #71819c;
 }
 
+.texto-celda {
+  max-inline-size: 18ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .acciones-tabla {
   display: flex;
   align-items: center;
@@ -179,7 +188,7 @@ td span {
   background: #eef4ff;
   color: #1167e8;
   border-radius: 12px;
-  padding: 0.65rem 0.8rem;
+  padding: 4px 7px;
   font-weight: 700;
 }
 

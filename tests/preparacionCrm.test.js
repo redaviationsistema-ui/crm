@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { crearCambiosContacto } from '../src/domain/contactoPayload.js'
 import { crearGuardadoControlado } from '../src/domain/guardarOperacion.js'
-import { validarOportunidad } from '../src/domain/oportunidades.js'
+import { validarOportunidad } from '../src/modulos/oportunidades/dominio/oportunidades.js'
 
 test('editar solo notas no borra campos omitidos ni acepta rol o creador', () => {
   assert.deepEqual(crearCambiosContacto({ notas: ' nota ', rol: 'administrador', creado_por: 'otro' }), { notas: 'nota' })

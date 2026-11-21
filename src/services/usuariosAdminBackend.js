@@ -1,3 +1,5 @@
+import { exigirEscriturasStagingHabilitadas } from '../lib/stagingWriteProtection.js'
+
 const OPERACIONES = new Set(['listar','crear','editar','cambiar_estado','eliminar_definitivamente','historial','cambiar_password','crear_con_password'])
 const MENSAJES_PASSWORD = {
   400:'Datos de contraseña no válidos.',
@@ -24,6 +26,7 @@ export function crearUsuariosAdminBackend({obtenerToken,obtenerConexion,fetchImp
   async function solicitar(operacion,datos={}) {
     if(!habilitado)throw Error('La gestión real de usuarios está desactivada por configuración del servidor.')
     if(!OPERACIONES.has(operacion))throw Error('Operación administrativa no permitida.')
+    if(!['listar','historial'].includes(operacion))exigirEscriturasStagingHabilitadas(`administrar usuarios: ${operacion}`)
     const conexion=obtenerConexion?await obtenerConexion():{token:await obtenerToken?.(),endpoint,apiKey}
     if(!conexion?.token)throw Error('Inicia sesión nuevamente para gestionar usuarios reales.')
     let destino

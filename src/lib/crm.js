@@ -160,3 +160,25 @@ export function esMismaFechaLocal(fechaIso, fechaComparacion = new Date()) {
     fecha.getDate() === fechaComparacion.getDate()
   )
 }
+
+export function limitesDiaLocal(fecha) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha)) return null
+
+  const inicio = new Date(`${fecha}T00:00:00`)
+  const [anio, mes, dia] = fecha.split('-').map(Number)
+  if (inicio.getFullYear() !== anio || inicio.getMonth() + 1 !== mes || inicio.getDate() !== dia) return null
+
+  const fin = new Date(`${fecha}T00:00:00`)
+  fin.setDate(dia + 1)
+  fin.setHours(0, 0, 0, 0)
+  return { inicio: inicio.getTime(), fin: fin.getTime() }
+}
+
+export function duracionLlamadaValida(minutos) {
+  return minutos === null || (Number.isSafeInteger(minutos) && minutos >= 0)
+}
+
+export function esEjecutivoActivo(perfil) {
+  return typeof perfil?.id === 'string' && perfil.id.trim() !== '' &&
+    perfil.rol === 'ejecutivo' && perfil.activo === true
+}

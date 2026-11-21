@@ -1,4 +1,4 @@
-import {calcularCotizacion,validarCotizacion} from '../domain/cotizaciones.js'
+import {calcularCotizacion,validarCotizacion} from '../dominio/cotizaciones.js'
 
 export const EMPRESA_COTIZACIONES = Object.freeze({nombre:'Red Sky Group LLC'})
 export function prepararCotizacionPdf(cotizacion) {

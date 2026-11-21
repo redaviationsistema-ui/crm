@@ -20,6 +20,7 @@ const props = defineProps({
     type: Array,
     default: () => [],
   },
+  errorLlamadas: { type: String, default: '' },
   llamadas: {
     type: Array,
     default: () => [],
@@ -38,7 +39,6 @@ const resumenMercados = computed(() => ({
   internacional: props.indicadores[6]?.valor || 0,
   completadas: props.indicadores[4]?.valor || 0,
 }))
-const llamadasResumen = computed(() => props.llamadas.slice(0, 4))
 </script>
 
 <template>
@@ -103,7 +103,8 @@ const llamadasResumen = computed(() => props.llamadas.slice(0, 4))
             </div>
           </div>
 
-          <div v-if="llamadasResumen.length" class="tabla-resumen">
+          <p v-if="errorLlamadas" role="status">{{ errorLlamadas }}</p>
+          <div v-else-if="llamadas.length" class="tabla-resumen">
             <table>
               <thead>
                 <tr>
@@ -116,7 +117,7 @@ const llamadasResumen = computed(() => props.llamadas.slice(0, 4))
                 </tr>
               </thead>
               <tbody>
-                <tr v-for="llamada in llamadasResumen" :key="llamada.id">
+                <tr v-for="llamada in llamadas" :key="llamada.id">
                   <td><BadgePrioridad :prioridad="llamada.prioridad" /></td>
                   <td>
                     <strong>{{ llamada.cliente.nombre }}</strong>
@@ -202,13 +203,13 @@ const llamadasResumen = computed(() => props.llamadas.slice(0, 4))
 
 .proxima-card {
   display: grid;
-  gap: 1rem;
+  gap: var(--espacio-panel);
 }
 
 .proxima-top {
   display: flex;
   justify-content: space-between;
-  gap: 1rem;
+  gap: var(--espacio-panel);
   align-items: flex-start;
 }
 
@@ -278,7 +279,7 @@ const llamadasResumen = computed(() => props.llamadas.slice(0, 4))
 
 .indicadores-compactos {
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 1rem;
+  gap: var(--espacio-panel);
 }
 
 .bloque-llamadas-resumen {
@@ -337,7 +338,7 @@ const llamadasResumen = computed(() => props.llamadas.slice(0, 4))
 }
 
 .estado-resumen :deep(.estado-vacio) {
-  padding: 1rem;
+  padding: var(--espacio-panel);
   border-radius: 14px;
   text-align: left;
   background: #f8fbff;
@@ -352,7 +353,7 @@ const llamadasResumen = computed(() => props.llamadas.slice(0, 4))
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 1rem;
+  gap: var(--espacio-panel);
   padding: 0.9rem 1rem;
   border-radius: 14px;
   background: #f8fbff;

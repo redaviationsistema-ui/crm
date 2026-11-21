@@ -1,8 +1,9 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { calcularCotizacion } from '../src/domain/cotizaciones.js'
-import { evaluarModoCotizaciones } from '../src/config/cotizacionesBackend.js'
-import { crearAdaptadorCotizacionesSupabase } from '../src/services/cotizacionesSupabaseAdapter.js'
+import { calcularCotizacion } from '../src/modulos/cotizaciones/dominio/cotizaciones.js'
+import { evaluarModoCotizaciones } from '../src/modulos/cotizaciones/esquemas/contratoCotizacionesSupabase.js'
+import { crearAdaptadorCotizacionesSupabase } from '../src/modulos/cotizaciones/adaptadores/adaptadorCotizacionesSupabase.js'
+import { crearCotizacionesNavegador } from '../src/modulos/cotizaciones/servicios/servicioCotizaciones.js'
 
 const usuarioId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
 const oportunidadId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
@@ -202,6 +203,25 @@ test('la política solo permite staging configurado y bloquea producción o una 
   assert.equal(evaluarModoCotizaciones({ ...env, MODE: 'production', DEV: false }, config).habilitado, false)
   assert.equal(evaluarModoCotizaciones({ ...env, VITE_COTIZACIONES_MODO: 'disabled' }, config).habilitado, false)
   assert.equal(evaluarModoCotizaciones({ ...env, VITE_SUPABASE_URL: 'https://uvwxyzabcdefghijklmn.supabase.co' }, config).habilitado, false)
+})
+
+test('Cotizaciones habilitadas por configuración de prueba requieren Oportunidades reales', async () => {
+  const entorno = { ...env, VITE_OPORTUNIDADES_MODO: 'supabase' }
+  assert.equal(evaluarModoCotizaciones(entorno, config).habilitado, true)
+
+  let consultas = 0
+  const servicio = crearCotizacionesNavegador({
+    env: entorno,
+    config,
+    obtenerCliente() {
+      consultas += 1
+      throw new Error('El cliente no debería consultarse')
+    },
+  })
+
+  assert.equal(servicio.modo, 'bloqueado')
+  await assert.rejects(servicio.cargar(), /El acceso a oportunidades reales no está habilitado/)
+  assert.equal(consultas, 0)
 })
 
 test('crear usa solo RPC, omite importes derivados y confirma releyendo datos persistidos', async () => {
